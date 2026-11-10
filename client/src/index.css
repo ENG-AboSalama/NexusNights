@@ -1,0 +1,117 @@
+@import "tailwindcss";
+@import "@fontsource/cinzel/600.css";
+@import "@fontsource/cinzel/800.css";
+@import "@fontsource-variable/hanken-grotesk/index.css";
+@import "@fontsource/amiri/400.css";
+@import "@fontsource/amiri/700.css";
+@import "@fontsource/ibm-plex-sans-arabic/400.css";
+@import "@fontsource/ibm-plex-sans-arabic/500.css";
+@import "@fontsource/ibm-plex-sans-arabic/600.css";
+
+/* ── Design tokens: "NexusNight" — cinematic noir, midnight crimson, gilt accents ── */
+@theme {
+  --color-ink: #0a0708;
+  --color-coal: #120d0f;
+  --color-crypt: #1a1316;
+  --color-ash: #2b2125;
+  --color-bone: #f2ebe3;
+  --color-dust: #a89c95;
+  --color-blood: #b3202f;
+  --color-blood-hot: #dc3044;
+  --color-gilt: #d4af6a;
+
+  --font-display: "Cinzel", "Amiri", Georgia, serif;
+  --font-sans: "Hanken Grotesk Variable", "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-rise: rise 0.9s var(--ease-out-expo) both;
+  --animate-fade: fade 0.6s ease-out both;
+  --animate-drift: drift 28s ease-in-out infinite alternate;
+  --animate-shimmer: shimmer 1.8s linear infinite;
+  --animate-pop: pop 0.6s var(--ease-out-expo) both;
+
+  @keyframes rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes drift { from { transform: scale(1.04) translate3d(0, 0, 0); } to { transform: scale(1.14) translate3d(-1.2%, -1%, 0); } }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  @keyframes pop { 0% { opacity: 0; transform: scale(0.6); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(1.5); } }
+}
+
+html { background: var(--color-ink); color: var(--color-bone); color-scheme: dark; -webkit-tap-highlight-color: transparent; }
+html[lang="ar"] { 
+  --font-display: "Amiri", "Cinzel", serif; 
+  font-family: "IBM Plex Sans Arabic", "Hanken Grotesk Variable", system-ui, sans-serif;
+}
+body { margin: 0; font-family: var(--font-sans); min-height: 100dvh; overflow-x: hidden; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+/* Arabic letters must stay joined: never letter-space them. */
+:lang(ar) { letter-spacing: normal; }
+html[lang="ar"] .font-display { font-family: "Amiri", serif; }
+html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3 { font-weight: 700; }
+
+/* Better Arabic spacing and readability */
+html[dir="rtl"] { text-align: start; }
+html[dir="rtl"] p, html[dir="rtl"] .text-dust { line-height: 1.8; }
+html[dir="rtl"] button, html[dir="rtl"] .rounded-lg { border-radius: 0.75rem; }
+
+/* film grain over everything except the player */
+body:not(.is-watching)::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 60; opacity: 0.07; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+::selection { background: var(--color-blood); color: white; }
+* { scrollbar-width: thin; scrollbar-color: var(--color-ash) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--color-ash); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--color-dust); }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--color-gilt) var(--color-crypt); }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--color-gilt); }
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+@layer base {
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+}
+button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--color-gilt); outline-offset: 2px; }
+
+.skeleton {
+  background: linear-gradient(100deg, var(--color-crypt) 30%, var(--color-ash) 50%, var(--color-crypt) 70%);
+  background-size: 200% 100%; animation: var(--animate-shimmer);
+}
+.text-balance { text-wrap: balance; }
+.mask-fade-x { mask-image: linear-gradient(to right, transparent 0, black 2.5rem, black calc(100% - 2.5rem), transparent 100%); }
+
+/* Player: subtitle readability */
+.cue { text-shadow: 0 0 6px #000, 0 0 2px #000, 0 2px 4px #000; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+:root {
+  --pad: clamp(1rem, 4vw, 3.5rem);
+  --card-w: clamp(10.5rem, 18vw, 16.5rem);
+  --poster-w: clamp(7.5rem, 11vw, 11rem);
+}
+
+/* floating reactions */
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(0) scale(0.6) rotate(0deg); }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-58cqh) scale(1.25) rotate(var(--r, 0deg)); }
+}
+.float-up { animation: float-up 3.4s cubic-bezier(0.22, 0.7, 0.3, 1) both; }
+
+/* Enhanced scrollbar and RTL support */
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--color-ash); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--color-dust); }
+.scrollbar-thin::-webkit-scrollbar { width: 6px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--color-gilt); border-radius: 3px; }
+
+/* Better Arabic text styling */
+html[lang="ar"] .font-display { font-family: "Amiri", serif; }
+html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3 { font-weight: 700; }
+html[dir="rtl"] p, html[dir="rtl"] .text-dust { line-height: 1.8; }

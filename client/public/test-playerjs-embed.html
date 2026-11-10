@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NexusNight Player.js Test Receiver</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0708;
+      color: #f2ebe3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      padding: 1rem;
+      user-select: none;
+    }
+    .video-canvas {
+      width: 100%;
+      max-width: 640px;
+      aspect-ratio: 16/9;
+      background: #120d0f;
+      border: 1px solid rgba(220, 48, 68, 0.4);
+      border-radius: 8px;
+      box-shadow: 0 0 24px rgba(220, 48, 68, 0.25);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(179, 32, 47, 0.85);
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .clock {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #d4af6a;
+      text-shadow: 0 2px 12px rgba(212, 175, 106, 0.4);
+    }
+    .status {
+      font-size: 13px;
+      color: #a89c95;
+      margin-top: 6px;
+    }
+    .wave {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .wave-fill {
+      height: 100%;
+      background: #dc3044;
+      width: 0%;
+      transition: width 0.3s linear;
+    }
+    .logs {
+      width: 100%;
+      max-width: 640px;
+      margin-top: 12px;
+      background: #1a1316;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #a89c95;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+    .log-line { margin-bottom: 2px; }
+    .log-in { color: #58a6ff; }
+    .log-out { color: #7ee787; }
+  </style>
+</head>
+<body>
+  <div class="video-canvas">
+    <div class="badge">Player.js Verified Receiver</div>
+    <div class="clock" id="clock">00:00</div>
+    <div class="status" id="status">Paused • Ready for commands</div>
+    <div class="wave"><div class="wave-fill" id="progress"></div></div>
+  </div>
+  <div class="logs" id="logs">
+    <div class="log-line">Initializing Player.js receiver...</div>
+  </div>
+
+  <script>
+    (function () {
+      var CONTEXT = 'player.js';
+      var VERSION = '0.0.11';
+      var duration = 180; // 3 minutes test stream
+      var currentTime = 0;
+      var isPlaying = false;
+      var volume = 1.0;
+      var isMuted = false;
+      var ticker = null;
+      var listeners = {};
+
+      var clockEl = document.getElementById('clock');
+      var statusEl = document.getElementById('status');
+      var progressEl = document.getElementById('progress');
+      var logsEl = document.getElementById('logs');
+
+      function log(msg, type) {
+        var div = document.createElement('div');
+        div.className = 'log-line ' + (type === 'in' ? 'log-in' : type === 'out' ? 'log-out' : '');
+        div.textContent = (type === 'in' ? '📥 ' : type === 'out' ? '📤 ' : 'ℹ️ ') + msg;
+        logsEl.appendChild(div);
+        logsEl.scrollTop = logsEl.scrollHeight;
+      }
+
+      function fmt(sec) {
+        var m = Math.floor(sec / 60);
+        var s = Math.floor(sec % 60);
+        return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      }
+
+      function updateUI() {
+        clockEl.textContent = fmt(currentTime);
+        statusEl.textContent = (isPlaying ? '▶ Playing' : '⏸ Paused') + ' • ' + Math.round(currentTime) + 's / ' + duration + 's (Vol: ' + Math.round(volume * 100) + '%)';
+        progressEl.style.width = ((currentTime / duration) * 100) + '%';
+      }
+
+      function emit(event, value) {
+        log('emit: ' + event + (value !== undefined ? ' (' + JSON.stringify(value) + ')' : ''), 'out');
+        var payload = {
+          context: CONTEXT,
+          version: VERSION,
+          event: event
+        };
+        if (value !== undefined) payload.value = value;
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage(JSON.stringify(payload), '*');
+          }
+        } catch (e) {}
+      }
+
+      function startTick() {
+        if (ticker) clearInterval(ticker);
+        ticker = setInterval(function () {
+          if (!isPlaying) return;
+          currentTime += 0.5;
+          if (currentTime >= duration) {
+            currentTime = duration;
+            isPlaying = false;
+            clearInterval(ticker);
+            updateUI();
+            emit('ended');
+            return;
+          }
+          updateUI();
+          emit('timeupdate', {
+            seconds: currentTime,
+            duration: duration,
+            percent: currentTime / duration
+          });
+        }, 500);
+      }
+
+      function stopTick() {
+        if (ticker) clearInterval(ticker);
+        ticker = null;
+      }
+
+      // Handshake ready message to parent
+      function sendReady() {
+        emit('ready', {
+          src: window.location.href,
+          methods: [
+            'play',
+            'pause',
+            'getPaused',
+            'getCurrentTime',
+            'setCurrentTime',
+            'getDuration',
+            'getVolume',
+            'setVolume',
+            'mute',
+            'unmute',
+            'getMuted',
+            'addEventListener',
+            'removeEventListener'
+          ],
+          events: ['ready', 'play', 'pause', 'timeupdate', 'ended', 'error']
+        });
+      }
+
+      // Handle inbound postMessages
+      window.addEventListener('message', function (e) {
+        var data = e.data;
+        if (typeof data === 'string') {
+          try { data = JSON.parse(data); } catch (err) { return; }
+        }
+        if (!data || data.context !== CONTEXT) return;
+
+        log('cmd: ' + data.method + (data.value !== undefined ? ' val=' + data.value : ''), 'in');
+
+        switch (data.method) {
+          case 'addEventListener':
+            if (data.value) listeners[data.value] = true;
+            if (data.value === 'ready') sendReady();
+            break;
+
+          case 'removeEventListener':
+            if (data.value) delete listeners[data.value];
+            break;
+
+          case 'play':
+            isPlaying = true;
+            startTick();
+            updateUI();
+            emit('play');
+            break;
+
+          case 'pause':
+            isPlaying = false;
+            stopTick();
+            updateUI();
+            emit('pause');
+            break;
+
+          case 'getPaused':
+            emit('getPaused', !isPlaying);
+            break;
+
+          case 'setCurrentTime':
+            var t = Number(data.value);
+            if (!isNaN(t)) {
+              currentTime = Math.max(0, Math.min(duration, t));
+              updateUI();
+              emit('timeupdate', {
+                seconds: currentTime,
+                duration: duration,
+                percent: currentTime / duration
+              });
+            }
+            break;
+
+          case 'getCurrentTime':
+            emit('getCurrentTime', currentTime);
+            break;
+
+          case 'getDuration':
+            emit('getDuration', duration);
+            break;
+
+          case 'setVolume':
+            var v = Number(data.value);
+            if (!isNaN(v)) {
+              volume = Math.max(0, Math.min(1, v));
+              updateUI();
+            }
+            break;
+
+          case 'getVolume':
+            emit('getVolume', volume);
+            break;
+
+          case 'mute':
+            isMuted = true;
+            updateUI();
+            break;
+
+          case 'unmute':
+            isMuted = false;
+            updateUI();
+            break;
+
+          case 'getMuted':
+            emit('getMuted', isMuted);
+            break;
+        }
+      });
+
+      // Send initial ready when loaded
+      window.addEventListener('load', function () {
+        setTimeout(sendReady, 100);
+      });
+      updateUI();
+    })();
+  </script>
+</body>
+</html>

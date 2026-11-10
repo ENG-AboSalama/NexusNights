@@ -1,0 +1,35 @@
+{
+  "name": "client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:tunnel": "vite --mode tunnel",
+    "build": "tsc --noEmit -p . && vite build",
+    "typecheck": "tsc --noEmit -p .",
+    "preview": "vite preview",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/hanken-grotesk": "^5.1.0",
+    "@fontsource/amiri": "^5.1.0",
+    "@fontsource/cinzel": "^5.1.0",
+    "@fontsource/ibm-plex-sans-arabic": "^5.1.0",
+    "@videojs/playerjs-video": "^10.3.0",
+    "@videojs/react": "^10.3.0",
+    "hls.js": "^1.5.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "socket.io-client": "^4.8.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0"
+  }
+}

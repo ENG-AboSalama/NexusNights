@@ -1,0 +1,107 @@
+/**
+ * NexusNight Custom Skin for Video.js 10 and Player.js Universal Embeds
+ * Applies cinematic noir, midnight crimson, and gilt accents to Video.js 10 controls.
+ */
+
+:root, .nexusnight-embed-skin {
+  /* Video.js 10 CSS custom property overrides */
+  --media-primary: #dc3044;
+  --media-primary-foreground: #ffffff;
+  --media-accent: #dc3044;
+  --media-accent-foreground: #ffffff;
+  --media-ring: #d4af6a;
+  --media-popover: #120d0f;
+  --media-popover-foreground: #f2ebe3;
+  --media-surface-border: #2b2125;
+  --media-border: rgba(255, 255, 255, 0.12);
+  --media-backdrop: rgba(10, 7, 8, 0.85);
+  --media-control-size: 2.5rem;
+  --media-control-radius: 9999px;
+  --media-font-family: "Hanken Grotesk Variable", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --media-display-font: "Cinzel", "Amiri", Georgia, serif;
+}
+
+/* Custom skin container */
+.nexusnight-embed-skin {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: #0a0708;
+  color: #f2ebe3;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Embed iframe container */
+.nexusnight-embed-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background-color: #000000;
+}
+
+/* Top bar with glassmorphism */
+.nexusnight-top-bar {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem 2.5rem;
+  background: linear-gradient(to bottom, rgba(10, 7, 8, 0.9) 0%, rgba(10, 7, 8, 0.5) 60%, transparent 100%);
+  pointer-events: none;
+}
+
+.nexusnight-top-bar > * {
+  pointer-events: auto;
+}
+
+/* Bottom controls bar */
+.nexusnight-controls-bar {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 20;
+  padding: 2.5rem 1.5rem 1rem;
+  background: linear-gradient(to top, rgba(10, 7, 8, 0.95) 0%, rgba(10, 7, 8, 0.7) 60%, transparent 100%);
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Crimson glow on active elements */
+.nexusnight-glow {
+  box-shadow: 0 0 16px rgba(220, 48, 68, 0.45);
+}
+
+.nexusnight-glow:hover {
+  box-shadow: 0 0 24px rgba(220, 48, 68, 0.75);
+}
+
+/* Capability badge pill */
+.capability-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.capability-supported {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.capability-unsupported {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  opacity: 0.8;
+}
