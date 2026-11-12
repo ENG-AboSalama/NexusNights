@@ -51,6 +51,11 @@ class StreamResolver {
     season?: number;
     episode?: number;
   }): Promise<ResolvedStream> {
+    const snifferEnabled = process.env.ENABLE_STREAM_SNIFFER !== 'false' && process.env.DISABLE_SNIFFER !== 'true';
+    if (!snifferEnabled) {
+      throw new Error('Stream sniffer is temporarily disabled via ENABLE_STREAM_SNIFFER=false');
+    }
+
     const key = this.getCacheKey(req);
 
     // 1. Check in-memory cache

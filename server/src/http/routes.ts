@@ -276,8 +276,9 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
       };
 
       // Automatic on-demand native HLS stream resolution
-      let nativeStream = streamResolver.getCached({ tmdbId, kind: 'movie' });
-      if (!nativeStream && !localMediaId) {
+      const snifferEnabled = process.env.ENABLE_STREAM_SNIFFER !== 'false' && process.env.DISABLE_SNIFFER !== 'true';
+      let nativeStream = snifferEnabled ? streamResolver.getCached({ tmdbId, kind: 'movie' }) : undefined;
+      if (!nativeStream && !localMediaId && snifferEnabled) {
         try {
           console.log(`[Playback] Auto-resolving native direct stream for movie ${tmdbId}...`);
           nativeStream = await streamResolver.resolve({ tmdbId, kind: 'movie' });
@@ -409,8 +410,9 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
       };
 
       // Automatic on-demand native HLS stream resolution for TV series
-      let nativeStream = streamResolver.getCached({ tmdbId, kind: 'series', season, episode });
-      if (!nativeStream && !localMediaId) {
+      const snifferEnabled = process.env.ENABLE_STREAM_SNIFFER !== 'false' && process.env.DISABLE_SNIFFER !== 'true';
+      let nativeStream = snifferEnabled ? streamResolver.getCached({ tmdbId, kind: 'series', season, episode }) : undefined;
+      if (!nativeStream && !localMediaId && snifferEnabled) {
         try {
           console.log(`[Playback] Auto-resolving native direct stream for TV ${tmdbId} S${season}E${episode}...`);
           nativeStream = await streamResolver.resolve({ tmdbId, kind: 'series', season, episode });
