@@ -139,7 +139,9 @@ class StreamResolver {
     cacheKey: string
   ): Promise<ResolvedStream> {
     const startTime = Date.now();
-    const timeoutMs = 25000;
+    // Configurable timeouts via environment variables or default to robust values for slower VPS/Docker
+    const timeoutMs = parseInt(process.env.STREAM_RESOLVER_TIMEOUT || '40000', 10);
+    const maxPerProviderMs = parseInt(process.env.PROVIDER_TIMEOUT || '18000', 10);
     const browserPath = this.getBrowserPath();
 
     // Construct embed target URLs — VixSrc provides direct HLS (.m3u8), VidSrc as fallback
@@ -217,7 +219,7 @@ class StreamResolver {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
                 'Referer': provider.url,
               },
-              signal: AbortSignal.timeout(3000),
+              signal: AbortSignal.timeout(5000),
             });
             if (checkRes.status === 404) {
               console.log(`[StreamResolver] ℹ️ VixSrc does not have this title (404), skipping...`);
@@ -281,11 +283,11 @@ class StreamResolver {
           });
 
           // Navigate to target embed URL
-          const navTimeout = Math.min(remainingTime - 1000, 10000);
+          const navTimeout = Math.min(remainingTime - 1000, maxPerProviderMs);
           await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: navTimeout });
 
           // Wait for stream to be captured (with per-provider timeout)
-          const perProviderTimeout = Math.min(remainingTime - 1000, 10000);
+          const perProviderTimeout = Math.min(remainingTime - 1000, maxPerProviderMs);
           const result = await Promise.race([
             streamPromise,
             new Promise<null>((r) => setTimeout(() => r(null), perProviderTimeout)),

@@ -105,12 +105,13 @@ export class PlaybackOrchestrator {
     const allSources: ProviderSource[] = [];
 
     // Query all active provider adapters in parallel with timeout safety
+    const adapterTimeout = parseInt(process.env.PROVIDER_RESOLVE_TIMEOUT || '12000', 10);
     const results = await Promise.allSettled(
       activeProviders.map((p) =>
         Promise.race([
           p.resolve(req),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Provider resolution timeout')), 8000)
+            setTimeout(() => reject(new Error('Provider resolution timeout')), adapterTimeout)
           ),
         ])
       )
