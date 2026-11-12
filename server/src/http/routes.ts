@@ -12,8 +12,10 @@ import path from 'node:path';
 import { Presenter, resolveLang, langToTmdb } from './present';
 import { playbackOrchestrator } from '../streaming/playback-orchestrator';
 import { providerRegistry } from '../streaming/provider-registry';
-import type { PlaybackConfigPublic, GlobalHomeResponse, GlobalHomeSection } from './api-types';
+import type { PlaybackConfigPublic, PlaybackSourcePublic, GlobalHomeResponse, GlobalHomeSection } from './api-types';
 import { DiscoveryPresenter } from '../tmdb/discovery-presenter';
+import { streamResolver } from '../streaming/stream-resolver';
+import { streamProxyRouter } from '../streaming/stream-proxy';
 
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => {
   fn(req, res).catch(next);
@@ -273,6 +275,30 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
         diagnosticsCount: config.diagnostics.length,
       };
 
+      // Automatic on-demand native HLS stream resolution
+      let nativeStream = streamResolver.getCached({ tmdbId, kind: 'movie' });
+      if (!nativeStream && !localMediaId) {
+        try {
+          console.log(`[Playback] Auto-resolving native direct stream for movie ${tmdbId}...`);
+          nativeStream = await streamResolver.resolve({ tmdbId, kind: 'movie' });
+        } catch (sniffErr: any) {
+          console.warn(`[Playback] Native auto-resolve fallback to embed for movie ${tmdbId}:`, sniffErr.message);
+        }
+      }
+
+      if (nativeStream) {
+        const nativeSource: PlaybackSourcePublic = {
+          url: `/api/stream-proxy/master/${nativeStream.id}.m3u8`,
+          type: 'hls',
+          quality: '1080p',
+          provider: `${nativeStream.provider} (Direct HLS)`,
+        };
+        if (playbackConfig.source) {
+          playbackConfig.alternatives = [playbackConfig.source, ...playbackConfig.alternatives];
+        }
+        playbackConfig.source = nativeSource;
+      }
+
       // Get title metadata (prefer local, fallback to TMDB)
       let title = '';
       let overview = '';
@@ -381,6 +407,30 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
         localMediaId,
         diagnosticsCount: config.diagnostics.length,
       };
+
+      // Automatic on-demand native HLS stream resolution for TV series
+      let nativeStream = streamResolver.getCached({ tmdbId, kind: 'series', season, episode });
+      if (!nativeStream && !localMediaId) {
+        try {
+          console.log(`[Playback] Auto-resolving native direct stream for TV ${tmdbId} S${season}E${episode}...`);
+          nativeStream = await streamResolver.resolve({ tmdbId, kind: 'series', season, episode });
+        } catch (sniffErr: any) {
+          console.warn(`[Playback] Native auto-resolve fallback to embed for TV ${tmdbId} S${season}E${episode}:`, sniffErr.message);
+        }
+      }
+
+      if (nativeStream) {
+        const nativeSource: PlaybackSourcePublic = {
+          url: `/api/stream-proxy/master/${nativeStream.id}.m3u8`,
+          type: 'hls',
+          quality: '1080p',
+          provider: `${nativeStream.provider} (Direct HLS)`,
+        };
+        if (playbackConfig.source) {
+          playbackConfig.alternatives = [playbackConfig.source, ...playbackConfig.alternatives];
+        }
+        playbackConfig.source = nativeSource;
+      }
 
       // Get episode metadata
       let title = '';
@@ -1000,6 +1050,98 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
     res.json({ ...present.status(), warnings: svc.status.warnings });
   });
 
+  /**
+   * POST /api/admin/verify
+   * Verify an admin token without exposing the actual token value.
+   * Returns 200 { ok: true } on success, 401 on failure.
+   */
+  router.post('/admin/verify', adminLimiter, express.json(), requireAdmin, (_req, res) => {
+    res.json({ ok: true });
+  });
+
+  /**
+   * GET /api/admin/stats
+   * Dashboard statistics — library counts, active rooms, recent sessions.
+   */
+  router.get('/admin/stats', adminLimiter, requireAdmin, (req, res) => {
+    // ── Library Stats ────────────────────────────────────────────────────────
+    const allMedia = Array.from(store.media.values());
+    const titles = Array.from(store.titles.values());
+    const movies = titles.filter((t) => t.kind === 'movie');
+    const episodes = allMedia.filter((m) => store.titles.get(m.titleId)?.kind === 'series');
+
+    // Build "most watched" from progress store if available
+    const progressData = deps.progress.getAll();
+    const watchCounts: Record<string, { title: string; kind: string; watchCount: number; totalWatchTime: number; posterUrl?: string }> = {};
+    for (const [_userId, entries] of Object.entries(progressData)) {
+      for (const [mediaId, entry] of Object.entries(entries as Record<string, { t: number; d?: number }>)) {
+        const m = store.media.get(mediaId);
+        if (!m) continue;
+        const title = store.titles.get(m.titleId);
+        if (!watchCounts[mediaId]) {
+          watchCounts[mediaId] = {
+            title: title ? present.titleName(title, 'en') : (m.titleHint ?? mediaId),
+            kind: title?.kind === 'movie' ? 'movie' : 'series',
+            watchCount: 0,
+            totalWatchTime: 0,
+            posterUrl: (title && present.posterUrl(title)) ?? undefined,
+          };
+        }
+        watchCounts[mediaId].watchCount += 1;
+        watchCounts[mediaId].totalWatchTime += (entry as any).t ?? 0;
+      }
+    }
+    const mostWatched = Object.entries(watchCounts)
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => b.watchCount - a.watchCount)
+      .slice(0, 20);
+
+    // Total watch time across all users & media
+    const totalWatchTime = Object.values(watchCounts).reduce((sum, v) => sum + v.totalWatchTime, 0);
+
+    // Count unique users from progress
+    const totalUsers = Object.keys(progressData).length;
+
+    // ── Room Stats (from realtime hub) ───────────────────────────────────────
+    // These are attached by app.ts onto res.locals or as a closure — we pass them in via deps
+    const roomStats = (deps as any).getRoomStats?.() ?? { activeRooms: 0, totalRooms: 0 };
+
+    // ── Recent Activity ──────────────────────────────────────────────────────
+    const recentRaw = deps.progress.getRecentActivity(20);
+    const recentActivity = recentRaw.map((e) => {
+      const m = store.media.get(e.mediaId);
+      const titleObj = m ? store.titles.get(m.titleId) : undefined;
+      const label = titleObj ? present.titleName(titleObj, 'en') : e.mediaId;
+      const pct = Math.round(e.progress * 100);
+      return {
+        userId: e.userId.slice(0, 8),
+        userName: `User ${e.userId.slice(0, 4)}`,
+        action: `watched "${label}" — ${pct}% (via ${e.provider})`,
+        timestamp: e.at,
+      };
+    });
+
+    res.json({
+      totalUsers,
+      activeSessions: roomStats.activeRooms,
+      totalWatchTime,
+      mostWatchedContent: mostWatched,
+      trafficSources: [],
+      recentActivity,
+      activeRooms: roomStats.activeRooms,
+      totalRooms: roomStats.totalRooms,
+      library: {
+        movies: movies.length,
+        episodes: episodes.length,
+        total: allMedia.length,
+      },
+      streaming: {
+        activeBrowserSessions: streamResolver.getActiveBrowserCount(),
+        maxBrowserSessions: 3,
+      },
+    });
+  });
+
   // ── Provider Health Reporting ──────────────────────────────────────────────
   /**
    * POST /api/playback/report-failure
@@ -1147,6 +1289,58 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
       providers: providerRegistry.getStatuses(),
     });
   });
+
+  /**
+   * POST /api/streaming/resolve-native
+   * Resolves a direct HLS stream for native player playback
+   */
+  router.post('/streaming/resolve-native', apiLimiter, express.json(), wrap(async (req, res) => {
+    const tmdbId = parseInt(req.body?.tmdbId, 10);
+    if (!tmdbId || isNaN(tmdbId)) {
+      return res.status(400).json({ error: 'invalid_tmdb_id' });
+    }
+    const kind = req.body?.kind === 'series' ? 'series' : 'movie';
+    const season = req.body?.season ? parseInt(req.body.season, 10) : undefined;
+    const episode = req.body?.episode ? parseInt(req.body.episode, 10) : undefined;
+
+    try {
+      const resolved = await streamResolver.resolve({ tmdbId, kind, season, episode });
+      res.json({
+        ok: true,
+        streamId: resolved.id,
+        streamUrl: `/api/stream-proxy/master/${resolved.id}.m3u8`,
+        provider: resolved.provider,
+        type: 'hls',
+      });
+    } catch (err: any) {
+      console.error('[Streaming] resolve-native failed:', err.message);
+      res.status(502).json({
+        ok: false,
+        error: 'resolution_failed',
+        message: err.message,
+      });
+    }
+  }));
+
+  /**
+   * POST /api/streaming/prewarm
+   * Pre-warms/caches stream in background (e.g. for next episode)
+   */
+  router.post('/streaming/prewarm', apiLimiter, express.json(), (req, res) => {
+    const tmdbId = parseInt(req.body?.tmdbId, 10);
+    if (!tmdbId || isNaN(tmdbId)) {
+      return res.status(400).json({ error: 'invalid_tmdb_id' });
+    }
+    const kind = req.body?.kind === 'series' ? 'series' : 'movie';
+    const season = req.body?.season ? parseInt(req.body.season, 10) : undefined;
+    const episode = req.body?.episode ? parseInt(req.body.episode, 10) : undefined;
+
+    void streamResolver.resolve({ tmdbId, kind, season, episode }).catch(() => {});
+    res.json({ ok: true, prewarming: true });
+  });
+
+  // Mount HLS Stream Proxy
+  router.use('/stream-proxy', streamProxyRouter);
 
   router.use((_req, res) => notFound(res));
   router.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

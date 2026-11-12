@@ -1,6 +1,14 @@
+import dns from 'node:dns';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import { z } from 'zod';
+
+// Prioritize IPv4 to prevent ETIMEDOUT when ISP assigns local IPv6 without WAN routing
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {
+  /* ignore */
+}
 
 /** Repo root (works from both src/ via tsx and dist/ after tsc). */
 export const ROOT = path.resolve(__dirname, '..', '..');
@@ -27,6 +35,7 @@ const EnvSchema = z.object({
   CLIENT_DIST: z.string().default('./client/dist'),
   SCAN_ON_START: bool.default('true'),
   ADMIN_TOKEN: z.string().min(8).optional(),
+  ADMIN_DISCORD_ID: z.string().optional(),
   TRUST_PROXY: z.coerce.number().int().min(0).default(1),
   DISCORD_CLIENT_ID: z.string().optional(),
   DISCORD_CLIENT_SECRET: z.string().optional(),
@@ -64,6 +73,8 @@ export interface Config {
   clientDir: string;
   scanOnStart: boolean;
   adminToken?: string;
+  /** Discord user id that may open the admin dashboard without a token. */
+  adminDiscordId?: string;
   trustProxy: number;
   discord: { clientId?: string; clientSecret?: string; redirectUri?: string; apiBase: string; cdnBase: string };
   jwtSecret?: string;
@@ -117,6 +128,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, opts: { load
     controlRoleIds: e.CONTROL_ROLE_IDS.split(',').map((x) => x.trim()).filter((x) => /^\d{15,25}$/.test(x)),
     progressFile: path.join(dataDir, 'progress.json'),
     adminToken: e.ADMIN_TOKEN,
+    adminDiscordId: e.ADMIN_DISCORD_ID,
     trustProxy: e.TRUST_PROXY,
     discord: { 
       clientId: e.DISCORD_CLIENT_ID, 

@@ -23,6 +23,7 @@ const USERS: Record<string, { id: string; username: string; global_name?: string
 let tmp: string, mock: http.Server, srv: http.Server, rt: ReturnType<typeof attachRealtime>, base: string, svc: LibraryService;
 let mediaA: string, mediaB: string;
 const sockets: Socket[] = [];
+const JWT_TOKENS = new Map<string, string>();
 
 before(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'dwt-rt-'));
@@ -48,11 +49,24 @@ before(async () => {
   const items = [...svc.store.media.values()].filter((x) => x.fileName.includes('S02E01') || x.fileName.includes('2x02'));
   mediaA = items.find((x) => x.fileName.includes('S02E01'))!.id;
   mediaB = items.find((x) => x.fileName.includes('2x02'))!.id;
-  const { app, auth } = createApp(svc);
+  const { app, sessions } = createApp(svc);
   srv = http.createServer(app);
-  rt = attachRealtime(srv, svc, auth);
+  rt = attachRealtime(srv, svc, sessions);
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+
+  for (const [key, user] of Object.entries(USERS)) {
+    const isPrivileged = user.roles?.includes(ROLE) ?? false;
+    const tokens = sessions.createTokens({
+      userId: user.id,
+      id: user.id,
+      username: user.username,
+      globalName: user.global_name,
+      avatar: user.avatar,
+      isPrivileged,
+    });
+    JWT_TOKENS.set(key, tokens.accessToken);
+  }
 });
 
 after(async () => {
@@ -64,9 +78,13 @@ after(async () => {
 });
 
 interface Client { s: Socket; snap: { you: string; room: PublicRoom; chat: unknown[] }; events: { name: string; data: any }[] }
-function open(auth: object, instanceId = 'room-1'): Promise<Client> {
+function open(auth: any, instanceId = 'room-1'): Promise<Client> {
+  const finalAuth = { ...auth };
+  if (finalAuth.accessToken && JWT_TOKENS.has(finalAuth.accessToken)) {
+    finalAuth.accessToken = JWT_TOKENS.get(finalAuth.accessToken);
+  }
   return new Promise((resolve, reject) => {
-    const s = connect(base, { auth: { instanceId, ...auth }, transports: ['websocket'], forceNew: true, reconnection: false });
+    const s = connect(base, { auth: { instanceId, ...finalAuth }, transports: ['websocket'], forceNew: true, reconnection: false });
     sockets.push(s);
     const events: Client['events'] = [];
     for (const n of ['room:state', 'room:update', 'chat:msg', 'reaction', 'control:request', 'error:cmd']) s.on(n, (d) => events.push({ name: n, data: d }));
@@ -74,7 +92,7 @@ function open(auth: object, instanceId = 'room-1'): Promise<Client> {
     s.once('connect_error', (e) => reject(e));
   });
 }
-const tokenClient = (t: string, room?: string) => open({ accessToken: t }, room);
+const tokenClient = (t: string, room?: string) => open({ accessToken: JWT_TOKENS.get(t) || t }, room);
 const guest = (n: string, hex = '0123456789ab', room?: string) => open({ guest: { id: `g-${hex}`, name: n } }, room);
 const wait = async (c: Client, name: string, pred: (d: any) => boolean = () => true, ms = 3000) => {
   const t0 = Date.now();
@@ -219,16 +237,16 @@ test('rooms are isolated per instance id', async () => {
 });
 
 test('progress API: Discord-token protected, validated, per user', async () => {
-  const put = (tok: string, id: string, body: unknown) => fetch(`${base}/api/progress/${id}`, { method: 'PUT', headers: { authorization: `Bearer ${tok}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const put = (tok: string, id: string, body: unknown) => fetch(`${base}/api/progress/${id}`, { method: 'PUT', headers: { authorization: `Bearer ${JWT_TOKENS.get(tok) || tok}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await put('nope', mediaA, { t: 5, d: 8 })).status, 401);
   assert.equal((await fetch(`${base}/api/progress`)).status, 401);
   assert.equal((await put('tokenAlice00', mediaA, { t: 5, d: 8 })).status, 200);
   assert.equal((await put('tokenAlice00', mediaA, { t: 'x', d: 8 })).status, 400);
   assert.equal((await put('tokenAlice00', mediaA, { t: 500, d: 8 })).status, 400);
   assert.equal((await put('tokenAlice00', 'zzzzzzzzzzzz', { t: 5, d: 8 })).status, 404);
-  const mine = (await (await fetch(`${base}/api/progress`, { headers: { authorization: 'Bearer tokenAlice00' } })).json()) as { progress: Record<string, { t: number }> };
+  const mine = (await (await fetch(`${base}/api/progress`, { headers: { authorization: `Bearer ${JWT_TOKENS.get('tokenAlice00')}` } })).json()) as { progress: Record<string, { t: number }> };
   assert.equal(mine.progress[mediaA].t, 5);
-  const bobs = (await (await fetch(`${base}/api/progress`, { headers: { authorization: 'Bearer tokenBob0000' } })).json()) as { progress: object };
+  const bobs = (await (await fetch(`${base}/api/progress`, { headers: { authorization: `Bearer ${JWT_TOKENS.get('tokenBob0000')}` } })).json()) as { progress: object };
   assert.deepEqual(bobs.progress, {});
 });
 

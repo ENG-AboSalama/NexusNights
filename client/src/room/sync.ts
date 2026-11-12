@@ -8,6 +8,12 @@ export interface SyncState {
   hold: boolean;
   at: number;
   version: number;
+  /** Current subtitle track ID (null = off) */
+  subtitleId: string | null;
+  /** Current audio track index */
+  audioTrack: number;
+  /** Playback speed rate */
+  playbackRate: number;
 }
 
 export const expectedPosition = (s: SyncState, serverNow: number): number =>

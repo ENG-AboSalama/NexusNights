@@ -52,6 +52,23 @@ export const api = {
     get<PlaybackResponse>(`/api/playback/movie/${tmdbId}?lang=${lang}`, signal),
   playbackTV: (tmdbId: number, season: number, episode: number, lang: string, signal?: AbortSignal) =>
     get<PlaybackResponse>(`/api/playback/tv/${tmdbId}/seasons/${season}/episodes/${episode}?lang=${lang}`, signal),
+  resolveNativeStream: async (req: {
+    tmdbId: number;
+    kind: 'movie' | 'series';
+    season?: number;
+    episode?: number;
+  }): Promise<{ ok: boolean; streamUrl: string; streamId: string; provider: string; type: 'hls' }> => {
+    const r = await fetch(BASE + '/api/streaming/resolve-native', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.message || 'فشل استخراج البث المباشر');
+    }
+    return r.json();
+  },
 
   // ── Global Discovery (Stage 5) ──
   discoveryHome: (lang: string, signal?: AbortSignal) => 

@@ -6,6 +6,7 @@ import { decide } from './sync';
 /**
  * Keeps ONE player in step with the room's authoritative state:
  *  - applies every state broadcast immediately (play / pause / seek / hold / resume)
+ *  - syncs subtitle, audio, and playback rate changes
  *  - every second corrects drift: >1.5s → seek, 0.4–1.5s → gentle playbackRate nudge
  *  - handles the browser's autoplay block (late joiners) via onNeedsGesture
  * Player → room traffic only comes from real user input (never from this hook), so there are no echo loops.
@@ -22,6 +23,13 @@ export function useRoomSync(opts: {
   roomRef.current = room;
   const gestureCb = useRef(onNeedsGesture);
   gestureCb.current = onNeedsGesture;
+  
+  // Track last synced values to avoid echo loops
+  const lastSyncedRef = useRef({
+    subtitleId: null as string | null,
+    audioTrack: 0,
+    playbackRate: 1,
+  });
 
   useEffect(() => {
     if (!ready || !room.active) return;
@@ -36,6 +44,29 @@ export function useRoomSync(opts: {
       if (Math.abs(h.getRate() - d.rate) > 0.001) h.setRate(d.rate);
       if (d.play && !h.isPlaying()) h.play().then(() => gestureCb.current(false)).catch(() => gestureCb.current(true));
       else if (!d.play && h.isPlaying()) h.pause();
+      
+      // Sync subtitle, audio, and playback rate (only on event, not on tick)
+      if (cause === 'event') {
+        const last = lastSyncedRef.current;
+        
+        // Sync subtitle if changed
+        if (s.subtitleId !== last.subtitleId) {
+          h.setSubtitle(s.subtitleId);
+          last.subtitleId = s.subtitleId;
+        }
+        
+        // Sync audio track if changed
+        if (s.audioTrack !== last.audioTrack) {
+          h.setAudioTrack(s.audioTrack);
+          last.audioTrack = s.audioTrack;
+        }
+        
+        // Sync playback rate if changed (and not currently nudging for drift correction)
+        if (s.playbackRate !== last.playbackRate && d.rate === s.playbackRate) {
+          h.setRate(s.playbackRate);
+          last.playbackRate = s.playbackRate;
+        }
+      }
     };
 
     apply('event');

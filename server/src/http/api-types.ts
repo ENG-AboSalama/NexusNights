@@ -121,6 +121,7 @@ export interface PlaybackSourcePublic {
   quality: string;
   provider: string;
   audioTracks?: Array<{ language: string; label: string }>;
+  embedUrl?: string; // Present when type === 'embed'
 }
 
 export interface PlaybackSubtitlePublic {

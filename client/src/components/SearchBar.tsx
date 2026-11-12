@@ -119,23 +119,26 @@ export function SearchBar() {
     <div ref={searchRef} className="relative w-full max-w-md" dir="ltr">
       <div className="relative">
         <input
-          type="text"
+          type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setShowResults(true)}
-          placeholder={lang === 'ar' ? 'ابحث عن أفلام ومسلسلات...' : 'Search movies & TV shows...'}
+          placeholder={lang === 'ar' ? 'ابحث عن أفلام ومسلسلات…' : 'Search movies & TV shows…'}
+          aria-label={lang === 'ar' ? 'البحث في الأفلام والمسلسلات' : 'Search for movies and TV shows'}
           className="w-full h-9 px-4 pe-20 bg-white/5 border border-white/10 rounded-full text-sm text-bone placeholder:text-dust focus:outline-none focus:border-gilt/60 transition-colors"
+          autoComplete="off"
+          spellCheck={false}
         />
         
         <div className="absolute end-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
-          {loading && <Spinner className="size-4 text-gilt" />}
+          {loading && <Spinner className="size-4 text-gilt" aria-hidden="true" />}
           {query && !loading && (
             <button
               onClick={clearSearch}
               className="text-dust hover:text-bone transition-colors"
-              aria-label="Clear"
+              aria-label={lang === 'ar' ? 'مسح البحث' : 'Clear search'}
             >
-              <X className="size-4" />
+              <X className="size-4" aria-hidden="true" />
             </button>
           )}
         </div>
@@ -143,7 +146,11 @@ export function SearchBar() {
       
       {/* Results Dropdown */}
       {showResults && results.length > 0 && (
-        <div className="absolute top-full mt-2 w-full bg-crypt/98 backdrop-blur-xl border border-gilt/20 rounded-2xl shadow-[0_8px_32px_0_rgba(201,168,106,0.15)] overflow-hidden z-50">
+        <div 
+          className="absolute top-full mt-2 w-full bg-crypt/98 backdrop-blur-xl border border-gilt/20 rounded-2xl shadow-[0_8px_32px_0_rgba(201,168,106,0.15)] overflow-hidden z-50"
+          role="listbox"
+          aria-label={lang === 'ar' ? 'نتائج البحث' : 'Search results'}
+        >
           <div className="max-h-[70vh] overflow-y-auto scrollbar-thin">
             {results.map(result => (
               <SearchResultItem
@@ -154,9 +161,15 @@ export function SearchBar() {
             ))}
           </div>
           
-          <div className="px-4 py-2.5 bg-gilt/5 border-t border-gilt/20 text-xs text-gilt/90 text-center font-medium">
+          <div className="px-4 py-2.5 bg-gilt/5 border-t border-gilt/20 text-xs text-gilt/90 text-center font-medium" role="status">
             {results.length} {t('results')}
           </div>
+        </div>
+      )}
+      
+      {loading && (
+        <div className="sr-only" role="status" aria-live="polite">
+          {lang === 'ar' ? 'جاري البحث…' : 'Searching…'}
         </div>
       )}
     </div>

@@ -17,8 +17,8 @@ export class ProviderRegistry {
   }
 
   private registerDefaults() {
-    this.register(new VixSrcAdapter());
-    this.register(new VidSrcMovAdapter());
+    this.register(new VidSrcMovAdapter()); // Primary
+    this.register(new VixSrcAdapter());    // Fallback
     this.register(new VidApiAdapter());
     this.register(new VidRockAdapter());
   }
@@ -107,10 +107,10 @@ export class ProviderRegistry {
       let description = '';
       let unsupportedReason: string | undefined = undefined;
 
-      if (adapter.id === 'vixsrc') {
-        description = 'Primary 1080p stream embed with comprehensive catalog & direct resolution';
-      } else if (adapter.id === 'vidsrc-mov') {
-        description = 'Secondary fast embed provider with automatic multi-mirror fallback';
+      if (adapter.id === 'vidsrc-mov') {
+        description = 'Primary fast embed provider with automatic multi-mirror fallback';
+      } else if (adapter.id === 'vixsrc') {
+        description = 'Fallback 1080p stream embed with comprehensive catalog & direct resolution';
       } else if (adapter.id === 'vidapi') {
         description = 'Tertiary clean embed provider with smooth playback stability';
       } else if (adapter.id === 'vidrock') {

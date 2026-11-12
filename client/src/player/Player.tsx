@@ -3,7 +3,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { api, u } from '../api';
 import { mapProviderEmbedUrl, remapVidApiNestedPlayerFrame } from '../util/url-utils';
 import type { EpisodeDetail, PlaybackErrorCode, PlaybackConfigPublic, PlaybackSourcePublic } from '../api-types';
-import { ArrowLeft, AudioTracks, ExitFullscreen, Fullscreen, Gauge, Next, Pause, Play, Skip, Spinner, Subtitles, Volume } from '../components/Icons';
+import { ArrowLeft, AudioTracks, ExitFullscreen, Fullscreen, Gauge, Lock, Next, Pause, Play, Skip, Spinner, Subtitles, Volume } from '../components/Icons';
 import { clamp, fmtTime } from '../format';
 import { useI18n } from '../i18n';
 import { ControlButton, Menu } from './Menu';
@@ -36,6 +36,9 @@ interface Props {
   autoPlay?: boolean;
   /** true → user input only fires onUser* callbacks; the parent applies state via the handle. */
   controlled?: boolean;
+  canControl?: boolean;
+  onDisabledControlClick?: () => void;
+  theatreMode?: boolean;
   hasNext: boolean;
   onBack: () => void;
   onNext: () => void;
@@ -44,6 +47,9 @@ interface Props {
   onUserPlay?: (t: number) => void;
   onUserPause?: (t: number) => void;
   onUserSeek?: (t: number) => void;
+  onSubtitleChange?: (subId: string | null) => void;
+  onAudioChange?: (trackIdx: number) => void;
+  onSpeedChange?: (rate: number) => void;
   /** Room mode: what the room *says* is happening (so a click during a "hold" sends the right intent). */
   intentPlaying?: boolean;
   /** Called once the media is loaded and can start. */
@@ -66,7 +72,7 @@ const put = (k: string, v: string) => { try { localStorage.setItem(k, v); } catc
 const sleep = (ms: number, s: AbortSignal) => new Promise<void>((res) => { const t = setTimeout(res, ms); s.addEventListener('abort', () => { clearTimeout(t); res(); }, { once: true }); });
 
 export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref) {
-  const { media, title, subtitle, startAt = 0, autoPlay = true, controlled = false, hasNext, onBack, onNext, onEnded, onProgress, onUserPlay, onUserPause, onUserSeek, intentPlaying, onReady, onBuffering, holdLabel, hideSpeed, overlay, extraControls } = props;
+  const { media, title, subtitle, startAt = 0, autoPlay = true, controlled = false, canControl = true, onDisabledControlClick, theatreMode = false, hasNext, onBack, onNext, onEnded, onProgress, onUserPlay, onUserPause, onUserSeek, onSubtitleChange, onAudioChange, onSpeedChange, intentPlaying, onReady, onBuffering, holdLabel, hideSpeed, overlay, extraControls } = props;
   const { streamingConfig, streamingLoading, streamingError } = props;
   const { t, lang } = useI18n();
 
@@ -108,6 +114,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
   const [volume, setVolume] = useState(() => clamp(num('umbra:vol', 1), 0, 1));
   const [muted, setMuted] = useState(false);
   const [rate, setRate] = useState(1);
+  const [selectedSourceIdx, setSelectedSourceIdx] = useState(0); // index of current playback source
   const [uiVisible, setUiVisible] = useState(true);
   const [menu, setMenu] = useState<null | 'subs' | 'audio' | 'speed'>(null);
   const [fs, setFs] = useState(false);
@@ -181,7 +188,8 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
         if (nextSource) {
           tried.add(nextSource.url);
           const nextIdx = allSources.indexOf(nextSource);
-          setFailoverMessage('جاري تجهيز مصدر بديل...');
+          const isNextEmbed = nextSource.type === 'embed';
+          setFailoverMessage(isNextEmbed ? t('nativeStreamFallback') : t('fallbackPreparing'));
           setCurrentSourceIndex(nextIdx >= 0 ? nextIdx : currentSourceIndex + 1);
           setRetry(prev => prev + 1);
           return;
@@ -525,6 +533,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
   const selectSubtitle = useCallback(async (id: string | null) => {
     setSubId(id);
     setMenu(null);
+    onSubtitleChange?.(id);
     const tr = allSubtitles.find((s: any) => s.id === id);
     put('umbra:sublang', tr?.lang ?? (id ? '' : 'off'));
     if (!tr) return setCues(null);
@@ -552,6 +561,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
   const selectAudio = useCallback((i: number) => {
     setAudioIdx(i);
     setMenu(null);
+    onAudioChange?.(i);
     const hls = hlsRef.current;
     if (hls && hls.audioTracks.length > 1) hls.audioTrack = i;
     const l = media.audioTracks[i]?.lang;
@@ -742,6 +752,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
 
   // ── surface gestures: click = play/pause (tap = toggle UI on touch), double-click = skip/fullscreen ──
   const onSurfaceClick = () => {
+    if (theatreMode) { poke(); return; }
     if (menu) return setMenu(null);
     window.clearTimeout(clickTimer.current);
     clickTimer.current = window.setTimeout(() => {
@@ -750,6 +761,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
     }, 230);
   };
   const onSurfaceDouble = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (theatreMode) { toggleFs(); return; }
     window.clearTimeout(clickTimer.current);
     const r = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width;
@@ -791,8 +803,17 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
       ref={rootRef}
       onPointerMove={poke}
       onPointerDown={(e) => { pointerType.current = e.pointerType; poke(); }}
-      className={`@container fixed inset-0 select-none overflow-hidden bg-black text-bone ${!showUi ? 'cursor-none' : ''}`}
+      className={`@container ${theatreMode ? 'relative size-full' : 'fixed inset-0'} select-none overflow-hidden bg-black text-bone ${!showUi ? 'cursor-none' : ''}`}
     >
+      {theatreMode && !canControl && (
+        <div
+          className="absolute inset-0 z-10 cursor-default"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDisabledControlClick?.();
+          }}
+        />
+      )}
       {isEmbed && currentSource && (
         <iframe
           ref={embedFrameRef}
@@ -826,6 +847,13 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
           <p className="truncate font-display text-[clamp(1rem,2.4cqw,1.5rem)] font-bold tracking-wide">{title}</p>
           {subtitle && <p className="truncate text-[clamp(0.75rem,1.5cqw,0.95rem)] text-dust">{subtitle}</p>}
         </div>
+        {/* Native HLS active badge */}
+        {!isEmbed && currentSource?.type === 'hls' && phase === 'ready' && (
+          <span className="pointer-events-none ms-auto shrink-0 flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
+            <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            {t('nativeStreamActive')}
+          </span>
+        )}
         {isEmbed && currentSource && (
           <div className="pointer-events-auto ms-auto flex items-center gap-2">
             {startAt > 10 && (
@@ -884,13 +912,25 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
 
       {/* preparing / error */}
       {(phase === 'preparing' || phase === 'loading') && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-black/60 px-6 text-center backdrop-blur-[2px]">
-          <Spinner className="size-12 text-gilt" />
-          <p className="font-display text-lg tracking-wide">{failoverMessage || t('preparing')}</p>
-          {phase === 'preparing' && !failoverMessage && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-black/75 px-6 text-center backdrop-blur-sm">
+          <div className="relative flex items-center justify-center">
+            <span className="absolute inline-flex size-16 animate-ping rounded-full bg-gilt/20" />
+            <Spinner className="size-12 text-gilt" />
+          </div>
+          <p className="font-display text-lg tracking-wide text-bone font-bold">
+            {failoverMessage || (streamingLoading ? t('nativeStreamLoading') : t('preparing'))}
+          </p>
+          {(phase === 'preparing' || streamingLoading) && !failoverMessage && (
             <>
-              <div className="h-1 w-56 overflow-hidden rounded-full bg-white/15"><div className="h-full bg-blood-hot transition-[width] duration-700" style={{ width: `${Math.max(4, prep * 100)}%` }} /></div>
-              <p className="max-w-sm text-sm text-dust">{t('preparingHint')}</p>
+              <div className="h-1 w-64 overflow-hidden rounded-full bg-white/15">
+                <div
+                  className="h-full bg-gradient-to-r from-gilt to-blood-hot transition-[width] duration-700 animate-pulse"
+                  style={{ width: `${Math.max(15, prep * 100)}%` }}
+                />
+              </div>
+              <p className="max-w-sm text-xs text-dust">
+                {streamingLoading ? t('nativeStreamLoadingHint') : t('preparingHint')}
+              </p>
             </>
           )}
         </div>
@@ -929,13 +969,28 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
       {/* bottom controls */}
       {!isEmbed && (
         <div className={`absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-[max(1rem,2.5cqw)] pb-[max(0.75rem,2cqh)] pt-14 transition-opacity duration-300 ${showUi ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
-          <SeekBar time={time} duration={duration} buffered={bufEnd} sprite={media.sprite} onSeek={userSeek} label="Seek" />
+          {!theatreMode && (
+            <SeekBar
+              time={time}
+              duration={duration}
+              buffered={bufEnd}
+              sprite={media.sprite}
+              onSeek={userSeek}
+              label="Seek"
+              disabled={controlled && !canControl}
+              onDisabledClick={onDisabledControlClick}
+            />
+          )}
           <div className="mt-1 flex items-center gap-1" dir="ltr">
-            <ControlButton label={playing ? t('pause') : t('play')} onClick={togglePlay}>
-              {playing ? <Pause className="size-6" /> : <Play className="size-6" />}
-            </ControlButton>
-            <ControlButton label={t('skipBack')} onClick={() => skip(-10)} className="@max-md:hidden"><Skip dir="back" className="size-6" /></ControlButton>
-            <ControlButton label={t('skipForward')} onClick={() => skip(10)} className="@max-md:hidden"><Skip dir="fwd" className="size-6" /></ControlButton>
+            {!theatreMode && (
+              <>
+                <ControlButton label={playing ? t('pause') : t('play')} onClick={togglePlay} disabled={controlled && !canControl} onDisabledClick={onDisabledControlClick}>
+                  {playing ? <Pause className="size-6" /> : <Play className="size-6" />}
+                </ControlButton>
+                <ControlButton label={t('skipBack')} onClick={() => skip(-10)} className="@max-md:hidden" disabled={controlled && !canControl} onDisabledClick={onDisabledControlClick}><Skip dir="back" className="size-6" /></ControlButton>
+                <ControlButton label={t('skipForward')} onClick={() => skip(10)} className="@max-md:hidden" disabled={controlled && !canControl} onDisabledClick={onDisabledControlClick}><Skip dir="fwd" className="size-6" /></ControlButton>
+              </>
+            )}
 
             <div className="group/vol flex items-center">
               <ControlButton label={muted ? t('unmute') : t('mute')} onClick={toggleMute}><Volume level={volLevel} className="size-6" /></ControlButton>
@@ -946,7 +1001,16 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
               />
             </div>
 
-            <span className="ms-1 whitespace-nowrap text-[0.82rem] tabular-nums text-bone/90 @max-sm:text-xs">{fmtTime(time)} <span className="text-dust">/ {fmtTime(duration)}</span></span>
+            <span className="ms-1 whitespace-nowrap text-[0.82rem] tabular-nums text-bone/90 @max-sm:text-xs">
+              {fmtTime(time)} <span className="text-dust">/ {fmtTime(duration)}</span>
+            </span>
+
+            {controlled && !canControl && !theatreMode && (
+              <span className="ms-2 inline-flex items-center gap-1 rounded-md bg-gilt/15 border border-gilt/30 px-2 py-0.5 text-[0.7rem] font-medium text-gilt" title={t('hostPlaybackLocked')}>
+                <Lock className="size-3" />
+                <span className="@max-sm:hidden">{t('hostControlOnly')}</span>
+              </span>
+            )}
 
             <div className="ms-auto flex items-center gap-0.5">
               {extraControls}
@@ -958,7 +1022,12 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
                   <Gauge className="size-6" />
                 </ControlButton>
                 {menu === 'speed' && (
-                  <Menu title={t('speed')} selected={String(rate)} onSelect={(id) => { videoRef.current!.playbackRate = Number(id); setMenu(null); }}
+                  <Menu title={t('speed')} selected={String(rate)} onSelect={(id) => { 
+                    const newRate = Number(id);
+                    videoRef.current!.playbackRate = newRate; 
+                    onSpeedChange?.(newRate);
+                    setMenu(null); 
+                  }}
                     items={RATES.map((r) => ({ id: String(r), label: r === 1 ? t('normal') : `${r}×` }))} />
                 )}
               </div>}

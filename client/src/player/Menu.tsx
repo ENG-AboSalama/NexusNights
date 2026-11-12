@@ -3,14 +3,38 @@ import { Check } from '../components/Icons';
 
 export interface MenuItem { id: string; label: string; hint?: string }
 
-export function ControlButton({ label, onClick, children, active = false, className = '' }: { label: string; onClick: () => void; children: ReactNode; active?: boolean; className?: string }) {
+export function ControlButton({ 
+  label, 
+  onClick, 
+  children, 
+  active = false, 
+  disabled = false,
+  onDisabledClick,
+  className = '' 
+}: { 
+  label: string; 
+  onClick: () => void; 
+  children: ReactNode; 
+  active?: boolean; 
+  disabled?: boolean;
+  onDisabledClick?: () => void;
+  className?: string 
+}) {
+  const handleClick = () => {
+    if (disabled && onDisabledClick) {
+      onDisabledClick();
+    } else if (!disabled) {
+      onClick();
+    }
+  };
+
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={`inline-flex size-10 items-center justify-center rounded-full transition-all duration-200 hover:bg-white/15 active:scale-90 ${active ? 'bg-white/15 text-gilt' : ''} ${className}`}
+      onClick={(e) => { e.stopPropagation(); handleClick(); }}
+      className={`inline-flex size-10 items-center justify-center rounded-full transition-all duration-200 hover:bg-white/15 active:scale-90 ${active ? 'bg-white/15 text-gilt' : ''} ${disabled ? 'opacity-40 cursor-not-allowed' : ''} ${className}`}
     >
       {children}
     </button>

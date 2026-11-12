@@ -5,7 +5,7 @@ export class VixSrcAdapter implements ProviderAdapter {
   readonly name = 'VixSrc';
   readonly isSupported = true;
   readonly supportedTypes = ['movie', 'series'] as const;
-  readonly basePriority = 100;
+  readonly basePriority = 90;
 
   private readonly BASE_URL = 'https://vixsrc.to';
 
@@ -38,6 +38,7 @@ export class VixSrcAdapter implements ProviderAdapter {
           id: `${this.id}-${req.kind}-${req.tmdbId}${req.season ? `-s${req.season}e${req.episode}` : ''}`,
           url,
           type: 'embed',
+          embedUrl: url, // Add embed URL for server-side streaming
           quality: '1080p',
           providerId: this.id,
           providerName: this.name,

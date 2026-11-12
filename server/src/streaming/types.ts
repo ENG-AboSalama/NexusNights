@@ -18,6 +18,7 @@ export interface ProviderSource {
   id: string;
   url: string;
   type: StreamSourceType;
+  embedUrl?: string; // Present when type === 'embed'
   quality: string;
   providerId: string;
   providerName: string;
@@ -47,6 +48,7 @@ export interface ProviderAdapter {
 export interface PlaybackSource {
   url: string;
   type: StreamSourceType;
+  embedUrl?: string; // Present when type === 'embed'
   quality: string;
   provider: string;
   isEmbed: boolean;

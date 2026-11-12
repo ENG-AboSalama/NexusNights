@@ -11,19 +11,22 @@ export interface User {
 
 export interface AuthState {
   user: User | null;
-  loading: boolean;
+  loading: boolean;      // true while BOTH auth AND admin-check are pending
   error: string | null;
+  isAdmin: boolean;
 }
 
 const initial: AuthState = {
   user: null,
   loading: true,
   error: null,
+  isAdmin: false,
 };
 
 const AuthContext = createContext<AuthState & {
   login: () => void;
   logout: () => void;
+  refreshAdmin: () => Promise<void>;
 }>(initial as any);
 
 export const useAuth = () => useContext(AuthContext);
@@ -47,9 +50,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
       localStorage.removeItem(TOKEN_KEY);
-      setState({ user: null, loading: false, error: null });
+      setState({ user: null, loading: false, error: null, isAdmin: false });
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  /** Shared helper: call /api/auth/is-admin and update state.isAdmin.
+   *  Always marks loading=false when done — it's the LAST step of init. */
+  const refreshAdmin = async (user: User | null) => {
+    try {
+      const session = user ? localStorage.getItem(TOKEN_KEY) : null;
+      const adminToken = localStorage.getItem('nexusnight_admin_token');
+      const res = await fetch('/api/auth/is-admin', {
+        headers: {
+          ...(session ? { Authorization: `Bearer ${session}` } : {}),
+          ...(adminToken ? { 'x-admin-token': adminToken } : {}),
+        },
+      });
+      const data = await res.json();
+      setState((prev) => ({ ...prev, isAdmin: !!data.isAdmin, loading: false }));
+    } catch {
+      setState((prev) => ({ ...prev, isAdmin: false, loading: false }));
     }
   };
 
@@ -60,7 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Checking auth, token:', token ? 'exists' : 'missing');
       
       if (!token) {
-        setState({ user: null, loading: false, error: null });
+        setState({ user: null, loading: true, error: null, isAdmin: false });
+        // Still check admin-token even without a Discord session
+        // refreshAdmin will flip loading→false when done
+        void refreshAdmin(null);
         return;
       }
 
@@ -81,11 +106,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name: user.globalName || user.username || 'User',
         };
         console.log('[Auth] User authenticated:', userWithName.name);
-        setState({ user: userWithName, loading: false, error: null });
+        // Keep loading:true — refreshAdmin will set it to false
+        setState({ user: userWithName, loading: true, error: null, isAdmin: false });
+        void refreshAdmin(userWithName);
       } catch (error) {
         console.error('[Auth] Auth check failed:', error);
         localStorage.removeItem(TOKEN_KEY);
-        setState({ user: null, loading: false, error: 'Authentication failed' });
+        setState({ user: null, loading: false, error: 'Authentication failed', isAdmin: false });
       }
     };
 
@@ -134,11 +161,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             name: user.globalName || user.username || 'User',
           };
           console.log('[Auth] Login successful:', userWithName.name);
-          setState({ user: userWithName, loading: false, error: null });
+          setState({ user: userWithName, loading: true, error: null, isAdmin: false });
+          void refreshAdmin(userWithName);
         } catch (error) {
           console.error('[Auth] Token validation failed:', error);
           localStorage.removeItem(TOKEN_KEY);
-          setState({ user: null, loading: false, error: 'Authentication failed' });
+          setState({ user: null, loading: false, error: 'Authentication failed', isAdmin: false });
         }
       };
       
@@ -146,8 +174,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** Public wrapper — call after saving admin token to sync isAdmin state */
+  const refreshAdminPublic = () => refreshAdmin(state.user);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ ...state, login, logout, refreshAdmin: refreshAdminPublic }}>
       {children}
     </AuthContext.Provider>
   );

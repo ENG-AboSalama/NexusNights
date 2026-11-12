@@ -235,6 +235,7 @@ export class PlaybackOrchestrator {
     return {
       url: source.url,
       type: source.type,
+      embedUrl: source.embedUrl, // Preserve embed URL for server-side streaming
       quality: source.quality,
       provider: source.providerName,
       isEmbed: source.isEmbed,

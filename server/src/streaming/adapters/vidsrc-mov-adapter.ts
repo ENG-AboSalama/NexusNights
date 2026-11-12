@@ -5,7 +5,7 @@ export class VidSrcMovAdapter implements ProviderAdapter {
   readonly name = 'VidSrc.mov';
   readonly isSupported = true;
   readonly supportedTypes = ['movie', 'series'] as const;
-  readonly basePriority = 90;
+  readonly basePriority = 100;
 
   private readonly BASE_URL = 'https://vidsrc.mov';
 
@@ -39,6 +39,7 @@ export class VidSrcMovAdapter implements ProviderAdapter {
           id: `${this.id}-${req.kind}-${id}${req.season ? `-s${req.season}e${req.episode}` : ''}`,
           url,
           type: 'embed',
+          embedUrl: url, // Add embed URL for server-side streaming
           quality: '1080p',
           providerId: this.id,
           providerName: this.name,

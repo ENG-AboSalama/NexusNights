@@ -33,7 +33,13 @@ export const Crown = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="m2 8 4 
 export const Hand = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8M8 18a6 6 0 0 0 9 5.2 2 2 0 0 0 1-1.7V11a2 2 0 0 0-2-2 2 2 0 0 0-2-2M4 15v3a6 6 0 0 0 6 6" /></svg>;
 export const Ban = (p: P<SVGSVGElement>) => <svg {...base(p)}><circle cx="12" cy="12" r="10" /><path d="m4.9 4.9 14.2 14.2" /></svg>;
 export const Chat = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>;
+export const MessageCircle = (p: P<SVGSVGElement>) => <svg {...base(p)}><circle cx="12" cy="12" r="10" /><path d="M8 14s1.5 2 4 2 4-2 4-2" /><path d="M9 9h.01M15 9h.01" /></svg>;
+export const Film = (p: P<SVGSVGElement>) => <svg {...base(p)}><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" /><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5" /></svg>;
+export const Trash2 = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" /></svg>;
+export const StopCircle = (p: P<SVGSVGElement>) => <svg {...base(p)}><circle cx="12" cy="12" r="10" /><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none" /></svg>;
 export const Close = X;
+export const Lock = (p: P<SVGSVGElement>) => <svg {...base(p)}><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>;
+export const Copy = (p: P<SVGSVGElement>) => <svg {...base(p)}><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>;
 export const ExternalLink = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><path d="m15 3 6 0 0 6" /><path d="m10 14 11-11" /></svg>;
 export const Sigil = (p: P<SVGSVGElement>) => (
   <svg {...base({ ...p, strokeWidth: 2, viewBox: '0 0 32 32' })}>
@@ -42,3 +48,9 @@ export const Sigil = (p: P<SVGSVGElement>) => (
     <circle cx="16" cy="16" r="3" fill="currentColor" stroke="none" />
   </svg>
 );
+export const Clock = (p: P<SVGSVGElement>) => <svg {...base(p)}><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>;
+export const TrendingUp = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="m23 6-9.5 9.5-5-5L1 18" /><path d="M17 6h6v6" /></svg>;
+export const Activity = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>;
+export const BarChart = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="M12 20V10M18 20V4M6 20v-4" /></svg>;
+export const Zap = (p: P<SVGSVGElement>) => <svg {...base(p)}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" /></svg>;
+export const Tv = (p: P<SVGSVGElement>) => <svg {...base(p)}><rect x="2" y="7" width="20" height="15" rx="2" ry="2" /><polyline points="17 2 12 7 7 2" /></svg>;

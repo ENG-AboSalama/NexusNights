@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => ({
     proxy: {
       '/api': { target: API, changeOrigin: false },
       '/socket.io': { target: API, ws: true },
+      '/ws': { target: API, ws: true },
+      '/hls': { target: API, changeOrigin: false },
     },
   },
   build: {

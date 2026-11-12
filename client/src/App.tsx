@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { Login } from './auth/Login';
 import { I18nProvider } from './i18n';
@@ -13,7 +14,21 @@ import { Toasts } from './room/Toasts';
 import { UniversalEmbedPlayer } from './player/embed/UniversalEmbedPlayer';
 import { ProvidersDashboard } from './pages/ProvidersDashboard';
 import { DiscoverRooms } from './pages/DiscoverRooms';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { go, useRoute } from './router';
+
+/** Shown when a non-admin tries to access an admin-only page */
+function AdminGate({ children }: { children: ReactNode }) {
+  const { isAdmin, loading } = useAuth();
+  // While auth+admin check is in-flight, render nothing (parent shows spinner)
+  if (loading) return null;
+  if (!isAdmin) {
+    // Not an admin — send them to the Admin login page to enter a token
+    go.adminDashboard();
+    return null;
+  }
+  return <>{children}</>;
+}
 
 function Routes() {
   const route = useRoute();
@@ -54,9 +69,11 @@ function Routes() {
         ) : route.name === 'global-title' ? (
           <GlobalTitle kind={route.kind} tmdbId={route.tmdbId} />
         ) : route.name === 'providers' ? (
-          <ProvidersDashboard />
+          <AdminGate><ProvidersDashboard /></AdminGate>
         ) : route.name === 'discover-rooms' ? (
           <DiscoverRooms />
+        ) : route.name === 'admin-dashboard' ? (
+          <AdminDashboard />
         ) : (
           <GlobalHome />
         )}
@@ -74,8 +91,8 @@ function AppContent() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-ink">
         <div className="text-center">
-          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blood-hot border-t-transparent"></div>
-          <p className="text-dust">Loading...</p>
+          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-blood-hot border-t-transparent" aria-hidden="true"></div>
+          <p className="text-dust" role="status" aria-live="polite">Loading…</p>
         </div>
       </div>
     );

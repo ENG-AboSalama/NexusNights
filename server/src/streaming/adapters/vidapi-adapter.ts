@@ -40,6 +40,7 @@ export class VidApiAdapter implements ProviderAdapter {
           id: `${this.id}-${req.kind}-${id}${req.season ? `-s${req.season}e${req.episode}` : ''}`,
           url,
           type: 'embed',
+          embedUrl: url, // Add embed URL for server-side streaming
           quality: '1080p',
           providerId: this.id,
           providerName: this.name,

@@ -9,6 +9,8 @@ export interface SessionPayload {
   discriminator: string;
   avatar: string | null;
   globalName: string | null;
+  roles?: string[];
+  privileged?: boolean;
 }
 
 export interface TokenPair {
@@ -21,11 +23,13 @@ export interface TokenPair {
  * Replaces Discord Activity token verification
  */
 export class SessionManager {
+  private readonly config: Config;
   private readonly secret: string;
   private readonly accessTokenExpiry: string;
   private readonly refreshTokenExpiry: string;
 
   constructor(config: Config) {
+    this.config = config;
     this.secret = process.env.JWT_SECRET || config.jwtSecret || 'change-me-in-production';
     this.accessTokenExpiry = '7d';
     this.refreshTokenExpiry = '30d';
@@ -38,14 +42,17 @@ export class SessionManager {
   /**
    * Create access and refresh tokens for a user
    */
-  createTokens(user: DiscordUser): TokenPair {
+  createTokens(user: DiscordUser & { roles?: string[]; privileged?: boolean; isPrivileged?: boolean }): TokenPair {
+    const hasPrivilegedRole = Array.isArray(user.roles) && user.roles.some((r: string) => this.config.controlRoleIds?.includes(r));
     const payload: SessionPayload = {
       id: user.id,
       userId: user.id,
       username: user.username,
-      discriminator: user.discriminator,
+      discriminator: user.discriminator || '0',
       avatar: user.avatar,
-      globalName: user.global_name,
+      globalName: user.global_name || (user as any).globalName || null,
+      roles: user.roles || [],
+      privileged: !!user.privileged || !!user.isPrivileged || hasPrivilegedRole,
     };
 
     const accessToken = jwt.sign(payload, this.secret, {

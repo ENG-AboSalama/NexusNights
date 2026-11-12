@@ -9,6 +9,9 @@ import { ProgressStore } from '../realtime/progress';
 import { createRoutes } from './routes';
 import { createAuthRoutes } from './auth-routes';
 import { registerRoomRoutes } from './room-routes';
+import { attachStreamingRoutes } from './streaming-routes';
+import { createProxyRoutes } from './proxy-routes';
+import { ROOT } from '../config';
 
 export function createApp(svc: LibraryService) {
   const app = express();
@@ -35,11 +38,40 @@ export function createApp(svc: LibraryService) {
   void progress.load();
 
   // Auth routes
-  const authRoutes = createAuthRoutes(discord, sessions);
+  const authRoutes = createAuthRoutes(discord, sessions, svc.cfg);
   app.use('/api/auth', authRoutes);
+
+  // Proxy routes (for same-origin embeds)
+  app.use('/api/proxy', createProxyRoutes());
 
   // Room management routes
   registerRoomRoutes(app, sessions);
+
+  // Streaming routes (server-side streaming)
+  attachStreamingRoutes(app, sessions);
+
+  // HLS streaming directory (serve .m3u8 and .ts files)
+  const hlsDir = path.resolve(ROOT, 'data', 'hls');
+  if (!fs.existsSync(hlsDir)) {
+    fs.mkdirSync(hlsDir, { recursive: true });
+  }
+  app.use('/hls', express.static(hlsDir, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.m3u8')) {
+        res.set('Content-Type', 'application/vnd.apple.mpegurl');
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      } else if (filePath.endsWith('.ts')) {
+        res.set('Content-Type', 'video/MP2T');
+        res.set('Cache-Control', 'public, max-age=3600');
+      }
+      res.set('Access-Control-Allow-Origin', '*');
+    },
+  }));
+
+  // IMPORTANT: Missing HLS segments/manifests must return 404, never fall through to SPA index.html!
+  app.use('/hls', (_req, res) => {
+    res.status(404).type('text/plain').send('HLS resource not ready or not found');
+  });
 
   // Main API routes
   const { router, adminToken } = createRoutes(svc, { sessions, progress });

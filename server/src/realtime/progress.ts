@@ -263,6 +263,42 @@ export class ProgressStore {
     this.timer.unref();
   }
 
+  /** Returns all users and their progress records — for admin stats. */
+  getAll(): Record<string, Record<string, Progress>> {
+    return Object.fromEntries(this.users);
+  }
+
+  /**
+   * Returns the N most recent progress updates across all users — for admin activity feed.
+   * Each entry has userId, mediaId, provider, timestamp.
+   */
+  getRecentActivity(limit = 20): Array<{
+    userId: string;
+    mediaId: string;
+    provider: string;
+    kind: 'movie' | 'tv' | null;
+    at: number;
+    progress: number; // 0–1
+  }> {
+    const events: Array<{ userId: string; mediaId: string; provider: string; kind: 'movie' | 'tv' | null; at: number; progress: number }> = [];
+
+    for (const [userId, records] of this.users) {
+      for (const [mediaId, p] of Object.entries(records)) {
+        if (p.t < 5) continue; // skip very short plays
+        events.push({
+          userId,
+          mediaId,
+          provider: p.provider ?? 'local',
+          kind: p.kind ?? null,
+          at: p.at,
+          progress: p.d > 0 ? Math.min(1, p.t / p.d) : 0,
+        });
+      }
+    }
+
+    return events.sort((a, b) => b.at - a.at).slice(0, limit);
+  }
+
   async flush() {
     if (this.timer) {
       clearTimeout(this.timer);

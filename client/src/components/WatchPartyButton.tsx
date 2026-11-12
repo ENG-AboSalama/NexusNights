@@ -13,16 +13,17 @@ interface Props {
  * Button to create/join a watch party room
  */
 export function WatchPartyButton({ mediaId, title, className = '' }: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [showModal, setShowModal] = useState(false);
 
   return (
     <>
       <button
         onClick={() => setShowModal(true)}
-        className={`flex items-center gap-2 rounded-lg border border-gilt/30 bg-gilt/10 px-4 py-2.5 font-medium text-gilt transition hover:border-gilt hover:bg-gilt/20 hover:text-bone ${className}`}
+        className={`inline-flex h-11 items-center gap-2.5 rounded-md border border-gilt/30 bg-gilt/5 px-6 font-semibold text-gilt transition-colors hover:border-gilt/60 hover:bg-gilt/15 hover:text-bone active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt focus-visible:ring-offset-2 focus-visible:ring-offset-ink ${className}`}
+        aria-label={lang === 'ar' ? 'إنشاء حفلة مشاهدة' : 'Create watch party'}
       >
-        <Users className="size-5" />
+        <Users className="size-5" aria-hidden="true" />
         <span>{t('createWatchParty')}</span>
       </button>
 

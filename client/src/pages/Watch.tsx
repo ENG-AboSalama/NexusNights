@@ -4,12 +4,16 @@ import type { PlaybackConfigPublic } from '../api-types';
 import { ErrorState } from '../components/States';
 import { Skel } from '../components/Skeleton';
 import { Spinner } from '../components/Icons';
+import { WatchPartyPlayer } from '../components/WatchPartyPlayer';
+import { ServerStreamPlayer } from '../components/ServerStreamPlayer';
+import { HostControlPanel } from '../components/HostControlPanel';
 import { useAsync } from '../hooks';
 import { useI18n } from '../i18n';
 import { Player, type PlayerHandle } from '../player/Player';
 import { getProgress, isFinished, saveProgress } from '../progress';
 import { RoomButtons, RoomOverlay, type Panel } from '../room/RoomControls';
 import { useRoom } from '../room/RoomContext';
+import { WaitingRoom } from '../room/WaitingRoom';
 import { useRoomSync } from '../room/useRoomSync';
 import { go } from '../router';
 import { prewarmNextEpisode, cancelPrewarm, shouldStartPrewarm } from '../util/prewarm';
@@ -25,6 +29,7 @@ export function Watch({ id }: { id: string }) {
   const [streamingConfig, setStreamingConfig] = useState<PlaybackConfigPublic | null>(null);
   const [streamingLoading, setStreamingLoading] = useState(false);
   const [streamingError, setStreamingError] = useState<string | null>(null);
+  const [serverStreamHlsUrl, setServerStreamHlsUrl] = useState<string | null>(null);
 
   useEffect(() => {
     document.body.classList.add('is-watching');
@@ -165,18 +170,25 @@ export function Watch({ id }: { id: string }) {
   }
   if (!media) return <div className="fixed inset-0 bg-black"><Skel className="size-full rounded-none opacity-40" /></div>;
 
-  if (roomMode && (!connected || !selected)) {
+  if (roomMode && (!connected || !selected || !room.room?.started)) {
     return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-black">
-        <Spinner className="size-10 text-gilt" />
-        <p className="font-display tracking-wide">{room.connection === 'connected' ? t('waitingRoom') : t('connecting')}</p>
-        <button
-          onClick={room.leaveRoom}
-          className="mt-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-xs text-dust hover:text-bone hover:bg-white/10 transition"
-        >
-          {t('leaveRoom')}
-        </button>
-      </div>
+      <WaitingRoom
+        media={media}
+        streamingConfig={streamingConfig}
+        onStart={(customConfig) => {
+          if (customConfig) {
+            setStreamingConfig(customConfig);
+          }
+          if (room.canControl) {
+            void room.startRoom();
+          }
+        }}
+        onStartServerStream={(hlsUrl) => {
+          // Server streaming mode activated
+          setServerStreamHlsUrl(hlsUrl);
+        }}
+        onLeave={room.leaveRoom}
+      />
     );
   }
 
@@ -202,7 +214,64 @@ export function Watch({ id }: { id: string }) {
     }
   };
 
-  return (
+  const activeStreamUrl = room.room?.streamUrl || serverStreamHlsUrl;
+
+  return roomMode ? (
+    activeStreamUrl ? (
+      // Server-side streaming mode
+      room.isHost ? (
+        // Host sees control panel only (video is in popup)
+        <HostControlPanel
+          title={isSeries ? media.titleName : media.title}
+          subtitle={sub}
+          mode="screenShare"
+          onBack={handleBack}
+          onStopStream={async () => {
+            setServerStreamHlsUrl(null);
+            await room.send({ type: 'stream:stop' });
+          }}
+          onSelectMovie={() => {
+            // Stop stream and navigate to home so host can create a new party
+            void room.send({ type: 'stream:stop' });
+            setServerStreamHlsUrl(null);
+            room.leaveRoom();
+            window.location.hash = '#/';
+          }}
+        />
+      ) : (
+        // Viewers see HLS stream
+        <ServerStreamPlayer
+          hlsUrl={activeStreamUrl}
+          title={isSeries ? media.titleName : media.title}
+          subtitle={sub}
+          onBack={handleBack}
+        />
+      )
+    ) : (
+      // Regular watch party with sync
+      <WatchPartyPlayer
+        ref={handle}
+        media={media}
+        title={isSeries ? media.titleName : media.title}
+        subtitle={sub}
+        streamingConfig={streamingConfig}
+        startAt={0}
+        hold={hold}
+        onBack={handleBack}
+        onEnded={() => { if (room.canControl) void room.send({ type: 'pause', position: media.runtimeSec ?? 0 }); }}
+        onReady={() => setReady(true)}
+        onProgress={(tt, d) =>
+          saveProgress(media.id, tt, d, {
+            provider: streamingConfig?.source?.provider || (media.playback ? 'local' : undefined),
+            tmdbId: media.tmdbId,
+            kind: media.kind === 'series' ? 'tv' : 'movie',
+            season: media.season ?? undefined,
+            episode: media.episode ?? undefined,
+          })
+        }
+      />
+    )
+  ) : (
     <Player
       key={media.id}
       ref={handle}
@@ -212,9 +281,8 @@ export function Watch({ id }: { id: string }) {
       streamingError={streamingError}
       title={isSeries ? media.titleName : media.title}
       subtitle={sub}
-      startAt={roomMode ? 0 : startAt}
-      autoPlay={!roomMode}
-      controlled={roomMode}
+      startAt={startAt}
+      autoPlay={true}
       hasNext={isSeries && !!media.nextId}
       onBack={handleBack}
       onNext={next}
@@ -228,20 +296,6 @@ export function Watch({ id }: { id: string }) {
         })
       }
       onReady={() => setReady(true)}
-      {...(roomMode
-        ? {
-            intentPlaying: !!room.state?.playing,
-            hideSpeed: true,
-            holdLabel: hold,
-            onBuffering: (k: 'load' | 'stall', v: boolean) => room.setBuffering(k, v),
-            onUserPlay: (tt: number) => guard(() => void room.send({ type: 'play', position: tt }))(),
-            onUserPause: (tt: number) => guard(() => void room.send({ type: 'pause', position: tt }))(),
-            onUserSeek: (tt: number) => guard(() => void room.send({ type: 'seek', position: tt }))(),
-            onEnded: () => { if (room.canControl) void room.send({ type: 'pause', position: media.runtimeSec ?? 0 }); },
-            extraControls: <RoomButtons panel={panel} setPanel={setPanel} />,
-            overlay: <RoomOverlay panel={panel} setPanel={setPanel} gesture={needsGesture} onGesture={() => { void handle.current?.play().then(() => setNeedsGesture(false)); }} />,
-          }
-        : {})}
     />
   );
 }

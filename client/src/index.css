@@ -71,9 +71,13 @@ body:not(.is-watching)::after {
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 @layer base {
-  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; touch-action: manipulation; }
+  a, button, [role="button"] { -webkit-tap-highlight-color: rgba(220, 48, 68, 0.15); }
 }
 button:focus-visible, a:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--color-gilt); outline-offset: 2px; }
+
+/* Ensure better text truncation in flex containers */
+.truncate-safe { min-width: 0; }
 
 .skeleton {
   background: linear-gradient(100deg, var(--color-crypt) 30%, var(--color-ash) 50%, var(--color-crypt) 70%);

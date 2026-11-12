@@ -21,17 +21,17 @@ export function ChatPanel({ className = '', onClose }: { className?: string; onC
   };
 
   return (
-    <div onClick={(e) => e.stopPropagation()} className={`flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-coal/95 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.95)] backdrop-blur-xl animate-fade ${className}`}>
+    <div onClick={(e) => e.stopPropagation()} className={`flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-coal/95 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.95)] backdrop-blur-xl animate-fade ${className}`} role="dialog" aria-label={t('chat')}>
       <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
         <h3 className="font-display text-sm font-semibold tracking-[0.18em]">{t('chat')}</h3>
-        <button onClick={onClose} aria-label="Close" className="rounded-full p-1 text-dust transition hover:bg-white/10 hover:text-bone"><Close className="size-4" /></button>
+        <button onClick={onClose} aria-label={lang === 'ar' ? 'إغلاق' : 'Close'} className="rounded-full p-1 text-dust transition-colors hover:bg-white/10 hover:text-bone focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt"><Close className="size-4" aria-hidden="true" /></button>
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-2">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-2" role="log" aria-live="polite" aria-atomic="false">
         {r.chat.length === 0 && <p className="py-6 text-center text-sm text-dust">{t('noMessages')}</p>}
         {r.chat.map((m) => (
           <div key={m.id} className="flex gap-2.5">
             <Avatar user={{ id: m.userId, name: m.name, avatar: m.avatar }} size={26} />
-            <div className="min-w-0">
+            <div className="min-w-0 truncate-safe">
               <p className="flex items-baseline gap-2 text-xs">
                 <span dir="auto" className={`truncate font-semibold ${m.userId === r.me?.id ? 'text-gilt' : 'text-bone'}`}>{m.name}</span>
                 <span className="text-[0.65rem] text-dust/70">{new Date(m.at).toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -51,20 +51,34 @@ export function ChatPanel({ className = '', onClose }: { className?: string; onC
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit(); }}
           placeholder={t('typeMessage')}
-          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm outline-none transition focus:border-gilt/60"
+          aria-label={t('typeMessage')}
+          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm outline-none transition-colors focus:border-gilt/60 focus-visible:border-gilt"
         />
-        <button onClick={submit} className="rounded-lg bg-blood px-4 text-sm font-semibold transition hover:bg-blood-hot active:scale-95">{t('send')}</button>
+        <button onClick={submit} disabled={!text.trim()} className="rounded-lg bg-blood px-4 text-sm font-semibold transition-all hover:bg-blood-hot active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt">{t('send')}</button>
       </div>
     </div>
   );
 }
 
 export function ReactionTray({ className = '' }: { className?: string }) {
+  const { lang } = useI18n();
   const r = useRoom();
   return (
-    <div onClick={(e) => e.stopPropagation()} className={`flex gap-1 rounded-full border border-white/10 bg-coal/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade ${className}`}>
+    <div 
+      onClick={(e) => e.stopPropagation()} 
+      className={`flex gap-1 rounded-full border border-white/10 bg-coal/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade ${className}`}
+      role="toolbar"
+      aria-label={lang === 'ar' ? 'ردود الفعل' : 'Reactions'}
+    >
       {EMOJIS.map((e) => (
-        <button key={e} onClick={() => r.react(e)} className="flex size-9 items-center justify-center rounded-full text-xl transition hover:scale-125 hover:bg-white/10 active:scale-90">{e}</button>
+        <button 
+          key={e} 
+          onClick={() => r.react(e)} 
+          className="flex size-9 items-center justify-center rounded-full text-xl transition-all hover:scale-125 hover:bg-white/10 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt"
+          aria-label={`React with ${e}`}
+        >
+          {e}
+        </button>
       ))}
     </div>
   );

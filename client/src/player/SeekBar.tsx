@@ -10,12 +10,14 @@ interface Props {
   sprite: SpriteInfoPublic | null;
   onSeek: (t: number) => void;
   label: string;
+  disabled?: boolean;
+  onDisabledClick?: () => void;
 }
 
 const SCALE = 1.2;
 
 /** Time axis is always left→right (even in RTL), like every video player. */
-export function SeekBar({ time, duration, buffered, sprite, onSeek, label }: Props) {
+export function SeekBar({ time, duration, buffered, sprite, onSeek, label, disabled = false, onDisabledClick }: Props) {
   const track = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ t: number; x: number } | null>(null);
   const [drag, setDrag] = useState<number | null>(null);
@@ -37,7 +39,7 @@ export function SeekBar({ time, duration, buffered, sprite, onSeek, label }: Pro
   const tip = drag !== null && hover === null ? { t: drag, x: (pct / 100) * (track.current?.clientWidth ?? 0) } : hover;
 
   let preview: JSX.Element | null = null;
-  if (tip) {
+  if (tip && !disabled) {
     const w = (sprite?.tileW ?? 0) * SCALE;
     const tw = track.current?.clientWidth ?? 0;
     const left = clamp(tip.x, Math.max(w / 2, 28) + 4, Math.max(tw - Math.max(w / 2, 28) - 4, 0));
@@ -72,26 +74,32 @@ export function SeekBar({ time, duration, buffered, sprite, onSeek, label }: Pro
       dir="ltr"
       ref={track}
       role="slider"
-      tabIndex={0}
+      tabIndex={disabled ? -1 : 0}
       aria-label={label}
+      aria-disabled={disabled}
       aria-valuemin={0}
       aria-valuemax={Math.round(duration)}
       aria-valuenow={Math.round(shown)}
-      className="group/seek relative flex h-5 w-full cursor-pointer touch-none items-center"
+      className={`group/seek relative flex h-5 w-full touch-none items-center ${disabled ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}`}
       onPointerMove={(e) => {
+        if (disabled) return;
         const p = pos(e.clientX);
         setHover(p);
         if (drag !== null) setDrag(p.t);
       }}
       onPointerLeave={() => setHover(null)}
       onPointerDown={(e) => {
+        if (disabled) {
+          onDisabledClick?.();
+          return;
+        }
         e.currentTarget.setPointerCapture(e.pointerId);
         const p = pos(e.clientX);
         setDrag(p.t);
         setHover(p);
       }}
       onPointerUp={(e) => {
-        if (drag === null) return;
+        if (disabled || drag === null) return;
         onSeek(pos(e.clientX).t);
         setDrag(null);
         if (e.pointerType !== 'mouse') setHover(null);

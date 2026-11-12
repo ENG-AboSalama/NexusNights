@@ -42,7 +42,7 @@ export function GlobalHome() {
     );
   }
 
-  if (empty) return <ErrorState title={t('emptyTitle')} hint={t('emptyHint')} />;
+  if (empty) return <ErrorState title={t('emptyTitle')} hint={t('emptyHint')} onRetry={home.reload} />;
 
   const { hero, sections } = home.data;
   const contItems = cont.data?.items ?? [];

@@ -8,6 +8,7 @@ import { useI18n } from '../i18n';
 import { go } from '../router';
 import { GlobalCard } from '../components/GlobalCard';
 import { WatchPartyButton } from '../components/WatchPartyButton';
+import { Play, Star } from '../components/Icons';
 
 interface Props {
   kind: 'movie' | 'series';
@@ -76,50 +77,78 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
   return (
     <div className="min-h-screen" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
       {/* Hero Section */}
-      <div className="relative">
+      <div className="relative isolate">
         {title.backdropUrl ? (
-          <div className="relative h-[50vh] w-full">
+          <div className="relative h-[min(66dvh,42rem)]">
             <img
               src={title.backdropUrl}
-              alt={title.title}
-              className="size-full object-cover"
+              alt=""
+              className="absolute inset-0 size-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/70 to-ink/30" />
+            <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/50 to-transparent rtl:bg-gradient-to-l" />
           </div>
         ) : (
-          <div className="h-[30vh] w-full bg-gradient-to-br from-gray-800 to-black" />
+          <div className="h-[min(42dvh,24rem)] bg-gradient-to-br from-blood/20 via-crypt to-ink" />
         )}
 
-        <div className="absolute inset-x-0 bottom-0 px-4 pb-8 sm:px-8">
-          <div className="container mx-auto max-w-6xl">
-            <h1 className="font-display text-4xl font-bold tracking-wide sm:text-6xl drop-shadow-2xl">{title.title}</h1>
-            {title.tagline && <p className="mt-2 text-lg text-gilt drop-shadow-lg">{title.tagline}</p>}
+        <div className="absolute inset-x-0 bottom-0 px-[var(--pad)] pb-8">
+          <div className="container mx-auto max-w-5xl">
+            <p className="mb-2 text-xs font-medium uppercase tracking-[0.3em] text-gilt">
+              {kind === 'series' ? t('series') : t('movie')}
+            </p>
+            <h1 className="text-balance font-display text-[clamp(2rem,5.5vw,3.6rem)] font-extrabold leading-[1.05] tracking-wide [@media(max-width:390px)]:text-[clamp(1.75rem,9vw,2.5rem)]">
+              {title.title}
+            </h1>
+            {title.tagline && <p className="mt-2 text-base text-gilt/90 italic">{title.tagline}</p>}
             
-            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-dust">
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-dust">
               {title.year && <span>{title.year}</span>}
-              {title.rating && <span>★ {title.rating.toFixed(1)}</span>}
-              {title.runtime && <span>{title.runtime} min</span>}
-              {title.genres.length > 0 && <span>{title.genres.slice(0, 3).join(', ')}</span>}
+              {title.rating && (
+                <span className="inline-flex items-center gap-1 font-semibold text-gilt">
+                  <Star className="size-3.5" aria-hidden="true" />
+                  {title.rating.toFixed(1)}
+                </span>
+              )}
+              {title.runtime && <span>{title.runtime} {t('minutesUnit')}</span>}
+              {title.genres.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {title.genres.slice(0, 3).map((g) => (
+                    <span key={g} className="rounded-sm border border-white/15 px-1.5 py-px text-[0.72rem] uppercase tracking-wider">
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Availability Badge */}
+            {/* Availability */}
             <div className="mt-4 flex gap-2 flex-wrap">
               {title.availability === 'local' && (
-                <span className="rounded-full bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-1.5 text-sm font-semibold shadow-lg">🟢 LOCAL</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600/20 border border-emerald-600/40 px-3 py-1 text-xs font-semibold text-emerald-400">
+                  <span className="size-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+                  {lang === 'ar' ? 'متاح محليًا' : 'Local'}
+                </span>
               )}
               {title.availability === 'stream' && (
-                <span className="rounded-full bg-gradient-to-r from-blue-600 to-cyan-600 px-4 py-1.5 text-sm font-semibold shadow-lg">🌐 STREAM AVAILABLE</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-600/20 border border-sky-600/40 px-3 py-1 text-xs font-semibold text-sky-400">
+                  <span className="size-1.5 rounded-full bg-sky-400" aria-hidden="true" />
+                  {lang === 'ar' ? 'بث متاح' : 'Stream'}
+                </span>
               )}
               {title.availability === 'discover' && (
-                <span className="rounded-full bg-gradient-to-r from-gray-600 to-slate-600 px-4 py-1.5 text-sm font-semibold shadow-lg">DISCOVER</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-dust/10 border border-dust/30 px-3 py-1 text-xs font-semibold text-dust">
+                  {lang === 'ar' ? 'للاستكشاف' : 'Discover'}
+                </span>
               )}
             </div>
 
             <div className="mt-6 flex gap-3 flex-wrap items-center">
               <button
                 onClick={handlePlay}
-                className="rounded-lg bg-blood px-8 py-3 font-semibold transition-all hover:bg-blood-hot hover:scale-105 active:scale-95 shadow-lg hover:shadow-blood/40"
+                className="group inline-flex h-11 items-center gap-2.5 rounded-md bg-blood px-7 font-semibold text-white shadow-[0_8px_30px_-8px_rgba(220,48,68,0.7)] transition-all hover:bg-blood-hot hover:shadow-[0_10px_36px_-6px_rgba(220,48,68,0.9)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
               >
+                <Play className="size-5 transition-transform group-hover:scale-110 rtl:-scale-x-100" aria-hidden="true" />
                 {kind === 'series' ? t('viewDetails') : t('play')}
               </button>
               {kind === 'movie' && (
@@ -130,7 +159,7 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
               )}
               <button
                 onClick={() => go.home()}
-                className="rounded-lg border border-gilt/30 bg-gilt/10 px-8 py-3 font-semibold transition-all hover:bg-gilt/20 hover:border-gilt/60 active:scale-95"
+                className="inline-flex h-11 items-center gap-2 rounded-md border border-gilt/30 bg-gilt/5 px-6 font-semibold text-gilt transition-colors hover:border-gilt/60 hover:bg-gilt/15 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
               >
                 {t('back')}
               </button>
@@ -158,11 +187,12 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
                 <button
                   key={s.seasonNumber}
                   onClick={() => setSelectedSeason(s.seasonNumber)}
-                  className={`rounded-lg px-4 py-2 font-semibold transition-all ${
+                  className={`rounded-md px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt ${
                     selectedSeason === s.seasonNumber
-                      ? 'bg-gradient-to-r from-blood to-blood-hot text-white shadow-lg scale-105'
-                      : 'bg-white/10 hover:bg-white/20 active:scale-95'
+                      ? 'bg-blood text-white shadow-[0_4px_16px_-4px_rgba(220,48,68,0.6)]'
+                      : 'bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 active:scale-95'
                   }`}
+                  aria-pressed={selectedSeason === s.seasonNumber}
                 >
                   {s.name}
                 </button>
@@ -171,39 +201,49 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
 
             {/* Episodes */}
             {season.data && season.data.episodes && (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {season.data.episodes.map((ep) => (
                   <div
                     key={ep.episodeNumber}
-                    className="flex gap-4 rounded-xl bg-white/5 border border-white/5 p-4 transition-all hover:bg-gilt/10 hover:border-gilt/20 group"
+                    className="group flex gap-4 rounded-lg bg-white/[0.03] border border-white/[0.06] p-3.5 transition-all hover:bg-white/[0.06] hover:border-gilt/20"
                   >
                     {ep.stillUrl && (
                       <img
                         src={ep.stillUrl}
-                        alt={ep.name}
-                        className="h-24 w-40 flex-shrink-0 rounded-lg object-cover ring-1 ring-white/10 group-hover:ring-gilt/30 transition-all"
+                        alt=""
+                        className="h-20 w-36 flex-shrink-0 rounded-md object-cover ring-1 ring-white/10 transition-all group-hover:ring-gilt/30 sm:h-24 sm:w-40"
                         loading="lazy"
                       />
                     )}
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-bone group-hover:text-gilt transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-bone transition-colors group-hover:text-gilt truncate-safe">
                         {ep.episodeNumber}. {ep.name}
                       </h3>
                       <p className="mt-1.5 text-sm text-dust line-clamp-2 leading-relaxed">{ep.overview}</p>
-                      <div className="mt-2.5 flex items-center gap-3 text-xs text-dust">
+                      <div className="mt-2 flex items-center gap-3 text-xs text-dust">
                         {ep.airDate && <span>{ep.airDate}</span>}
                         {ep.runtime && <span>{ep.runtime} {t('minutesUnit')}</span>}
-                        {ep.rating && <span>★ {ep.rating.toFixed(1)}</span>}
+                        {ep.rating && (
+                          <span className="inline-flex items-center gap-0.5">
+                            <Star className="size-2.5" aria-hidden="true" />
+                            {ep.rating.toFixed(1)}
+                          </span>
+                        )}
                         {ep.availability === 'local' && (
-                          <span className="rounded-full bg-green-600/90 px-2.5 py-0.5 text-white font-medium">LOCAL</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600/20 border border-emerald-600/40 px-2 py-0.5 text-emerald-400 font-medium">
+                            <span className="size-1 rounded-full bg-emerald-400" aria-hidden="true" />
+                            {lang === 'ar' ? 'محلي' : 'Local'}
+                          </span>
                         )}
                       </div>
                     </div>
                     <button
                       onClick={() => handleEpisodePlay(ep.seasonNumber, ep.episodeNumber, ep.localMediaId)}
-                      className="flex-shrink-0 rounded-lg bg-blood px-6 py-2.5 text-sm font-semibold transition-all hover:bg-blood-hot hover:scale-105 active:scale-95 shadow-md hover:shadow-blood/40"
+                      className="flex-shrink-0 self-center inline-flex h-9 items-center gap-2 rounded-md bg-blood px-5 text-sm font-semibold transition-all hover:bg-blood-hot hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt"
+                      aria-label={`${t('play')} ${ep.name}`}
                     >
-                      {t('play')}
+                      <Play className="size-4 rtl:-scale-x-100" aria-hidden="true" />
+                      <span className="hidden sm:inline">{t('play')}</span>
                     </button>
                   </div>
                 ))}

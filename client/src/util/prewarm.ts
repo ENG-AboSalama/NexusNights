@@ -59,6 +59,17 @@ export function prewarmNextEpisode(nextMediaId: string | null, lang: string): vo
       if (metadata.playback?.mode === 'hls') {
         void prewarmHlsManifest(nextMediaId);
       }
+
+      // If next episode is a streaming title (TMDB), pre-warm its stream in background!
+      if (!metadata.playback && metadata.tmdbId) {
+        if (metadata.season !== null && metadata.episode !== null) {
+          // TV episode prewarm
+          void api.playbackTV(metadata.tmdbId, metadata.season, metadata.episode, lang, state.abortController?.signal).catch(() => {});
+        } else if (metadata.kind === 'movie') {
+          // Movie prewarm — trigger playback endpoint which calls streamResolver.resolve() in background
+          void api.playbackMovie(metadata.tmdbId, lang, state.abortController?.signal).catch(() => {});
+        }
+      }
     })
     .catch((error) => {
       // Silently handle errors (network failure, 404, etc)

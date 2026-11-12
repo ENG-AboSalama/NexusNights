@@ -50,16 +50,21 @@ export const Row = memo(function Row({ title, children }: { title: string; child
 });
 
 function Arrow({ side, onClick }: { side: 'start' | 'end'; onClick: () => void }) {
+  const { lang } = useI18n();
   const Icon = side === 'start' ? ChevronLeft : ChevronRight;
+  const label = side === 'start' 
+    ? (lang === 'ar' ? 'السابق' : 'Previous') 
+    : (lang === 'ar' ? 'التالي' : 'Next');
+  
   return (
     <button
       onClick={onClick}
-      aria-label={side}
+      aria-label={label}
       className={`absolute inset-y-2 z-10 hidden w-12 items-center justify-center opacity-0 transition-opacity duration-300 group-hover/row:opacity-100 sm:flex ${
         side === 'start' ? 'start-0 bg-gradient-to-r from-ink/90 to-transparent rtl:bg-gradient-to-l' : 'end-0 bg-gradient-to-l from-ink/90 to-transparent rtl:bg-gradient-to-r'
       }`}
     >
-      <Icon className="size-8 rtl:-scale-x-100" />
+      <Icon className="size-8 rtl:-scale-x-100" aria-hidden="true" />
     </button>
   );
 }

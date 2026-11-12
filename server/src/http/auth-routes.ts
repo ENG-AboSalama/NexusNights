@@ -1,17 +1,27 @@
+import crypto from 'node:crypto';
 import express, { type Request, type Response } from 'express';
 import type { DiscordOAuth } from '../auth/discord-oauth';
 import type { SessionManager } from '../auth/session';
+import type { Config } from '../config';
 import { requireAuth } from '../auth/middleware';
 
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, next: express.NextFunction) => {
   fn(req, res).catch(next);
 };
 
+/** Constant-time compare so admin tokens can't be brute-forced by timing. */
+function tokenMatches(provided: string, expected: string): boolean {
+  if (!provided || !expected) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 /**
  * Authentication routes using Discord OAuth2
  * Replaces Discord Activity authentication
  */
-export function createAuthRoutes(discord: DiscordOAuth, sessions: SessionManager): express.Router {
+export function createAuthRoutes(discord: DiscordOAuth, sessions: SessionManager, cfg: Config): express.Router {
   const router = express.Router();
 
   // Redirect to Discord OAuth2
@@ -39,7 +49,12 @@ export function createAuthRoutes(discord: DiscordOAuth, sessions: SessionManager
       const { accessToken } = sessions.createTokens(user);
 
       // Redirect to client with token (use hash-based routing)
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      // CLIENT_URL wins if set. Otherwise: on a real domain redirect back to the
+      // same origin (the server also serves the built client); only fall back to
+      // the Vite dev server when the callback itself was hit on localhost.
+      const host = String(req.get('x-forwarded-host') || req.get('host') || '');
+      const isLocal = /^(localhost|127\.0\.0\.1)(:|$)/.test(host);
+      const clientUrl = (process.env.CLIENT_URL || (isLocal ? 'http://localhost:5173' : '')).replace(/\/+$/, '');
       res.redirect(`${clientUrl}/#/?token=${accessToken}`);
     } catch (error) {
       console.error('[Auth] OAuth callback failed:', error);
@@ -54,6 +69,29 @@ export function createAuthRoutes(discord: DiscordOAuth, sessions: SessionManager
       id: req.user?.id || req.user?.userId,
       userId: req.user?.userId || req.user?.id,
     });
+  });
+
+  /**
+   * GET /api/auth/is-admin
+   * True when the caller is the configured Discord admin OR supplies a valid ADMIN_TOKEN.
+   * The token path lets you open the dashboard without a Discord identity.
+   */
+  router.get('/is-admin', (req, res) => {
+    const provided = (req.get('x-admin-token') ?? '').trim();
+    const byToken = cfg.adminToken ? tokenMatches(provided, cfg.adminToken) : false;
+
+    let byDiscord = false;
+    if (cfg.adminDiscordId) {
+      const session = sessions.extractToken(req.headers.authorization);
+      if (session) {
+        try {
+          const user = sessions.verifyToken(session);
+          byDiscord = user.id === cfg.adminDiscordId || user.userId === cfg.adminDiscordId;
+        } catch { /* invalid/expired token → not an admin */ }
+      }
+    }
+
+    res.json({ isAdmin: byToken || byDiscord });
   });
 
   // Logout

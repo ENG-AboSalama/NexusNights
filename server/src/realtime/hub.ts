@@ -81,7 +81,7 @@ export function attachRealtime(server: http.Server, svc: LibraryService, session
           name: payload.globalName || payload.username,
           avatar: payload.avatar,
           guest: false,
-          privileged: false
+          privileged: !!payload.privileged
         };
       } else if (a.guest) {
         if (!cfg.allowGuest) throw new Error('guest_not_allowed');
@@ -143,7 +143,12 @@ export function attachRealtime(server: http.Server, svc: LibraryService, session
       if (!p.success) return reply(ack, false, 'invalid');
       const res = r.apply(user.id, p.data, Date.now());
       if (!res.ok) { socket.emit('error:cmd', { code: res.code }); return reply(ack, false, res.code); }
-      if (res.changed) emitState(r, p.data.type, user.id);
+      if (res.changed) {
+        emitState(r, p.data.type, user.id);
+        if (p.data.type === 'start' || p.data.type === 'play' || p.data.type === 'stream:start' || p.data.type === 'stream:stop') {
+          emitMembers(r);
+        }
+      }
       reply(ack, true);
     });
 
@@ -190,6 +195,18 @@ export function attachRealtime(server: http.Server, svc: LibraryService, session
       const msg: ChatMsg = { id: crypto.randomUUID(), userId: user.id, name: user.name, avatar: user.avatar, text, at: Date.now() };
       r.addChat(msg);
       io.to(roomId).emit('chat:msg', msg);
+      reply(ack, true);
+    });
+
+    // ── room destroy (host only) ─────────────────────────────────────────────
+    socket.on('room:destroy', (_raw: unknown, ack?: Ack) => {
+      if (!guard(buckets.misc, ack)) return;
+      if (user.id !== r.hostId) return reply(ack, false, 'forbidden');
+      // Notify all members before wiping the room
+      io.to(roomId).emit('room:closed', { reason: 'host_ended' });
+      // Clean up room from memory
+      rooms.delete(roomId);
+      roomRegistry.closeRoom(roomId);
       reply(ack, true);
     });
 

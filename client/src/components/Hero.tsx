@@ -47,7 +47,7 @@ export function Hero({ hero, fallbackImage, resumable, onPlay, onInfo }: Props) 
               {hero.kind === 'series' ? t('series') : t('movie')}
             </p>
           )}
-          <h1 dir="auto" className="animate-rise text-balance font-display text-[clamp(2.5rem,7vw,5.5rem)] font-extrabold leading-[0.95] tracking-tight text-bone [animation-delay:160ms] [text-shadow:0_8px_24px_rgba(220,48,68,0.4),0_2px_8px_rgba(0,0,0,0.8)]">
+          <h1 dir="auto" className="animate-rise text-balance font-display text-[clamp(2rem,7vw,5.5rem)] font-extrabold leading-[0.95] tracking-tight text-bone [animation-delay:160ms] [text-shadow:0_8px_24px_rgba(220,48,68,0.4),0_2px_8px_rgba(0,0,0,0.8)] [@media(max-width:390px)]:text-[clamp(1.75rem,9vw,2.5rem)]">
             {hero.title}
           </h1>
           <div className="mt-4 flex animate-rise flex-wrap items-center gap-x-3 gap-y-1 text-sm text-dust [animation-delay:260ms]">
@@ -61,12 +61,18 @@ export function Hero({ hero, fallbackImage, resumable, onPlay, onInfo }: Props) 
             <p dir="auto" className="mt-4 line-clamp-3 max-w-prose animate-rise [@media(max-height:560px)]:hidden text-[0.95rem] leading-relaxed text-bone/85 [animation-delay:340ms] sm:text-base">{hero.overview}</p>
           )}
           <div className="mt-7 flex animate-rise flex-wrap gap-3 [animation-delay:440ms]">
-            <button onClick={onPlay} className="group relative inline-flex h-12 items-center gap-2.5 overflow-hidden rounded-sm bg-blood px-7 text-base font-bold tracking-wide text-white shadow-[0_0_0_1px_rgba(220,48,68,0.5),0_12px_28px_-8px_rgba(220,48,68,0.6)] transition-all duration-300 hover:bg-blood-hot hover:shadow-[0_0_0_2px_rgba(220,48,68,1),0_16px_36px_-6px_rgba(220,48,68,0.9)] active:scale-95 before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:translate-x-[-200%] hover:before:translate-x-[200%] before:transition-transform before:duration-700">
-              <Play className="relative z-10 size-5 transition-transform duration-300 group-hover:translate-x-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5" />
+            <button 
+              onClick={onPlay} 
+              className="group relative inline-flex h-11 items-center gap-2.5 overflow-hidden rounded-md bg-blood px-7 text-base font-bold tracking-wide text-white shadow-[0_0_0_1px_rgba(220,48,68,0.5),0_12px_28px_-8px_rgba(220,48,68,0.6)] transition-all duration-300 hover:bg-blood-hot hover:shadow-[0_0_0_2px_rgba(220,48,68,1),0_16px_36px_-6px_rgba(220,48,68,0.9)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt focus-visible:ring-offset-2 focus-visible:ring-offset-ink before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:translate-x-[-200%] hover:before:translate-x-[200%] before:transition-transform before:duration-700"
+            >
+              <Play className="relative z-10 size-5 transition-transform duration-300 group-hover:translate-x-0.5 rtl:-scale-x-100 rtl:group-hover:-translate-x-0.5" aria-hidden="true" />
               <span className="relative z-10">{resumable ? t('resume') : t('play')}</span>
             </button>
-            <button onClick={onInfo} className="group inline-flex h-12 items-center gap-2.5 rounded-sm border border-white/15 bg-white/5 px-6 text-base font-semibold backdrop-blur-md transition-all duration-200 hover:border-gilt/70 hover:bg-white/10 hover:shadow-[0_0_20px_-4px_rgba(201,168,106,0.4)] active:scale-95">
-              <Info className="size-5 transition-transform duration-200 group-hover:rotate-12" />
+            <button 
+              onClick={onInfo} 
+              className="group inline-flex h-11 items-center gap-2.5 rounded-md border border-gilt/30 bg-gilt/5 px-6 text-base font-semibold text-bone backdrop-blur-md transition-all duration-200 hover:border-gilt/60 hover:bg-gilt/15 hover:text-gilt active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+            >
+              <Info className="size-5 transition-transform duration-200 group-hover:rotate-12" aria-hidden="true" />
               {t('moreInfo')}
             </button>
           </div>

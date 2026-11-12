@@ -8,14 +8,20 @@ import { bestOffset, type SyncState } from './sync';
 
 export type ControlMode = 'host' | 'selected' | 'everyone';
 export interface RoomMember { id: string; name: string; avatar: string | null; guest: boolean; isHost: boolean; canControl: boolean; buffering: boolean }
-export interface RoomInfo { id: string; hostId: string | null; mode: ControlMode; controllers: string[]; pending: string[]; members: RoomMember[]; state: SyncState }
+export interface RoomInfo { id: string; hostId: string | null; mode: ControlMode; controllers: string[]; pending: string[]; members: RoomMember[]; state: SyncState; started: boolean; streamUrl?: string | null }
 export interface ChatMsg { id: string; userId: string; name: string; avatar: string | null; text: string; at: number }
 export interface ReactionEv { id: string; userId: string; name: string; emoji: string }
 export interface StateEvent { state: SyncState; by: string | null; reason: string }
 export interface Toast { id: number; text: string }
 export type Cmd =
   | { type: 'play' | 'pause' | 'seek'; position: number }
-  | { type: 'select'; mediaId: string; position?: number };
+  | { type: 'select'; mediaId: string; position?: number }
+  | { type: 'start' }
+  | { type: 'stream:start'; hlsUrl: string }
+  | { type: 'stream:stop' }
+  | { type: 'subtitle'; subtitleId: string | null }
+  | { type: 'audio'; audioTrack: number }
+  | { type: 'speed'; playbackRate: number };
 type Result = { ok: boolean; error?: string };
 
 export const EMOJIS = ['❤️', '😂', '😮', '😢', '👏', '🔥', '💀', '👀'];
@@ -38,6 +44,7 @@ export interface RoomApi {
   toasts: Toast[];
   toast: (text: string) => void;
   send: (cmd: Cmd) => Promise<Result>;
+  startRoom: () => Promise<Result>;
   setBuffering: (kind: 'load' | 'stall', value: boolean) => void;
   sendChat: (text: string) => Promise<Result>;
   react: (emoji: string) => void;
@@ -45,6 +52,7 @@ export interface RoomApi {
   act: (event: 'control:grant' | 'control:deny' | 'control:revoke' | 'control:transfer', userId: string) => void;
   setMode: (mode: ControlMode) => void;
   leaveRoom: () => void;
+  destroyRoom: () => Promise<Result>;
   serverNow: () => number;
   getState: () => SyncState | null;
   onState: (cb: (e: StateEvent) => void) => () => void;
@@ -223,6 +231,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     });
     s.on('control:request', (d: { userId: string; name: string }) => toast(tRef.current('requestsControl', { name: d.name })));
     s.on('error:cmd', (d: { code: string }) => { if (d.code === 'forbidden') toast(tRef.current('onlyHost')); });
+    s.on('room:closed', () => {
+      toast('تم إنهاء الغرفة من قِبل المضيف');
+      leaveRoom();
+      window.location.hash = '#/';
+    });
 
     return () => {
       window.clearInterval(clockTimer);
@@ -259,6 +272,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     setChatOpen: (open) => { chatOpen.current = open; if (open) setUnread(0); },
     reactions, toasts, toast,
     send: (cmd) => emit('cmd', cmd),
+    startRoom: () => emit('cmd', { type: 'start' }),
     setBuffering: (kind, v) => { sock.current?.emit('buffering', { kind, value: v }); },
     sendChat: (text) => emit('chat', { text }),
     react: (emoji) => { void emit('reaction', { emoji }); },
@@ -266,6 +280,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     act: (event, userId) => { void emit(event, { userId }); },
     setMode: (mode) => { void emit('control:mode', { mode }); },
     leaveRoom,
+    destroyRoom: () => emit('room:destroy'),
     serverNow,
     getState: () => stateRef.current,
     onState: (cb) => { listeners.current.add(cb); return () => { listeners.current.delete(cb); }; },

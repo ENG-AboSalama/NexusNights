@@ -22,6 +22,12 @@ export interface PlaybackState {
   hold: boolean;
   at: number;
   version: number;
+  /** Current subtitle track ID (null = off) */
+  subtitleId: string | null;
+  /** Current audio track index */
+  audioTrack: number;
+  /** Playback speed rate */
+  playbackRate: number;
 }
 
 export interface ChatMsg { id: string; userId: string; name: string; avatar: string | null; text: string; at: number }
@@ -29,7 +35,7 @@ export interface ChatMsg { id: string; userId: string; name: string; avatar: str
 export interface PublicMember { id: string; name: string; avatar: string | null; guest: boolean; isHost: boolean; canControl: boolean; buffering: boolean }
 export interface PublicRoom {
   id: string; hostId: string | null; mode: ControlMode; controllers: string[]; pending: string[];
-  members: PublicMember[]; state: PlaybackState;
+  members: PublicMember[]; state: PlaybackState; started: boolean; streamUrl?: string | null;
 }
 
 export type CmdResult =
@@ -57,6 +63,8 @@ export class Room {
   members = new Map<string, Member>();
   chat: ChatMsg[] = [];
   state: PlaybackState;
+  started = false;
+  streamUrl: string | null = null;
   private lastSelectAt = 0;
 
   constructor(
@@ -66,7 +74,17 @@ export class Room {
     public designatedHostId: string | null = null,
   ) {
     this.hostId = designatedHostId;
-    this.state = { mediaId: null, position: 0, playing: false, hold: false, at: now, version: 0 };
+    this.state = { 
+      mediaId: null, 
+      position: 0, 
+      playing: false, 
+      hold: false, 
+      at: now, 
+      version: 0,
+      subtitleId: null,
+      audioTrack: 0,
+      playbackRate: 1,
+    };
   }
 
   // ── membership ──────────────────────────────────────────────────────────
@@ -169,22 +187,67 @@ export class Room {
     if (!this.canControl(userId)) return { ok: false, code: 'forbidden' };
     const s = this.state;
 
+    if (cmd.type === 'start') {
+      this.started = true;
+      this.state = { ...s, playing: true, hold: false, at: now, version: s.version + 1 };
+      for (const m of this.members.values()) { m.awaitingLoad = false; }
+      return { ok: true, changed: true };
+    }
+
+    if (cmd.type === 'stream:start') {
+      this.streamUrl = cmd.hlsUrl;
+      this.started = true;
+      this.state = { ...s, playing: true, hold: false, at: now, version: s.version + 1 };
+      for (const m of this.members.values()) { m.awaitingLoad = false; }
+      return { ok: true, changed: true };
+    }
+
+    if (cmd.type === 'stream:stop') {
+      this.streamUrl = null;
+      return { ok: true, changed: true };
+    }
+
     if (cmd.type === 'select') {
       if (!this.deps.mediaExists(cmd.mediaId)) return { ok: false, code: 'unknown_media' };
       // several controllers' players fire "next episode" at the same moment → apply once
       if (s.mediaId === cmd.mediaId && now - this.lastSelectAt < 3000) return { ok: true, changed: false };
       this.lastSelectAt = now;
-      this.state = { mediaId: cmd.mediaId, position: this.clamp(cmd.mediaId, cmd.position ?? 0), playing: true, hold: false, at: now, version: s.version + 1 };
+      this.state = { 
+        mediaId: cmd.mediaId, 
+        position: this.clamp(cmd.mediaId, cmd.position ?? 0), 
+        playing: true, 
+        hold: false, 
+        at: now, 
+        version: s.version + 1,
+        subtitleId: null, // Reset for new media
+        audioTrack: 0,
+        playbackRate: 1,
+      };
       for (const m of this.members.values()) { m.awaitingLoad = true; m.stalled = false; m.bufferingSince = now; }
       this.recomputeHold(now);
       return { ok: true, changed: true };
     }
 
     if (!s.mediaId) return { ok: false, code: 'no_media' };
-    const position = this.clamp(s.mediaId, cmd.position);
-    if (cmd.type === 'play') this.state = { ...s, position, playing: true, at: now, version: s.version + 1 };
-    else if (cmd.type === 'pause') this.state = { ...s, position, playing: false, hold: false, at: now, version: s.version + 1 };
-    else this.state = { ...s, position, at: now, version: s.version + 1 };
+    
+    if (cmd.type === 'play' || cmd.type === 'pause' || cmd.type === 'seek') {
+      const position = this.clamp(s.mediaId, cmd.position);
+      if (cmd.type === 'play') {
+        this.started = true;
+        this.state = { ...s, position, playing: true, at: now, version: s.version + 1 };
+      } else if (cmd.type === 'pause') {
+        this.state = { ...s, position, playing: false, hold: false, at: now, version: s.version + 1 };
+      } else {
+        this.state = { ...s, position, at: now, version: s.version + 1 };
+      }
+    } else if (cmd.type === 'subtitle') {
+      this.state = { ...s, subtitleId: cmd.subtitleId, at: now, version: s.version + 1 };
+    } else if (cmd.type === 'audio') {
+      this.state = { ...s, audioTrack: cmd.audioTrack, at: now, version: s.version + 1 };
+    } else if (cmd.type === 'speed') {
+      this.state = { ...s, playbackRate: cmd.playbackRate, at: now, version: s.version + 1 };
+    }
+    
     this.recomputeHold(now);
     return { ok: true, changed: true };
   }
@@ -237,6 +300,8 @@ export class Room {
       id: this.id,
       hostId: this.hostId,
       mode: this.mode,
+      started: this.started,
+      streamUrl: this.streamUrl,
       controllers: [...this.controllers],
       pending: [...this.pending],
       members: [...this.members.values()].sort((a, b) => a.joinedAt - b.joinedAt).map((m) => ({
