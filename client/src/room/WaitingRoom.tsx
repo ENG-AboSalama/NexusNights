@@ -603,6 +603,22 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
                       )}
                       <span>{t('startScreenShareManual')}</span>
                     </button>
+
+                    {/* Option 3: Direct Embed Fallback (Instant backup if direct stream unavailable) */}
+                    {streamingConfig?.source && (
+                      <button
+                        onClick={() => {
+                          if (onStart) onStart(streamingConfig);
+                          else void room.startRoom();
+                        }}
+                        disabled={starting || !isConnected}
+                        className="flex items-center justify-center gap-2 rounded-2xl border border-gilt/40 bg-gilt/10 hover:bg-gilt/20 px-4 py-3.5 font-display text-xs font-semibold text-gilt transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                        title={lang === 'ar' ? 'تشغيل بالمشغل الاحتياطي (Embed)' : 'Play with fallback embed player'}
+                      >
+                        <Play className="size-4 text-gilt fill-gilt" />
+                        <span>{lang === 'ar' ? 'المشغل الاحتياطي' : 'Fallback Player'}</span>
+                      </button>
+                    )}
                   </>
                 ) : (
                   /* Local Library Media Playback */

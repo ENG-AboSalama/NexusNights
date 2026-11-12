@@ -6,7 +6,6 @@
 
 import { chromium, type Browser, type BrowserContext } from 'playwright';
 import fs from 'fs';
-import { setupStealthPage, emulateHumanBehavior } from './stealth-config';
 
 export interface ResolvedStream {
   id: string;
@@ -170,10 +169,17 @@ class StreamResolver {
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-blink-features=AutomationControlled',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--no-zygote',
+          '--single-process',
+          '--disable-software-rasterizer',
+          '--disable-extensions',
           '--autoplay-policy=no-user-gesture-required',
           '--mute-audio',
           '--disable-web-security',
+          '--disable-blink-features=AutomationControlled',
+          '--window-size=1280,720',
         ],
       };
 
@@ -183,7 +189,7 @@ class StreamResolver {
 
       browser = await chromium.launch(launchOptions);
       context = await browser.newContext({
-        viewport: { width: 1920, height: 1080 },
+        viewport: { width: 1280, height: 720 },
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         locale: 'en-US',
         timezoneId: 'America/New_York',
@@ -197,15 +203,48 @@ class StreamResolver {
         const remainingTime = timeoutMs - (Date.now() - startTime);
         if (remainingTime < 3000) break; // Not enough time left
 
+        let targetUrl = provider.url;
+        let navReferer = provider.referer;
+
+        // Pre-check for VixSrc: fast 1-second check to see if title exists (avoid 10s timeout on 404)
+        if (provider.name === 'VixSrc') {
+          try {
+            const apiPath = req.kind === 'series'
+              ? `tv/${req.tmdbId}/${req.season ?? 1}/${req.episode ?? 1}`
+              : `movie/${req.tmdbId}`;
+            const checkRes = await fetch(`https://vixsrc.to/api/${apiPath}`, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'Referer': provider.url,
+              },
+              signal: AbortSignal.timeout(3000),
+            });
+            if (checkRes.status === 404) {
+              console.log(`[StreamResolver] ℹ️ VixSrc does not have this title (404), skipping...`);
+              continue;
+            }
+            if (checkRes.ok) {
+              const apiData: any = await checkRes.json().catch(() => null);
+              if (apiData?.src) {
+                targetUrl = `https://vixsrc.to${apiData.src}`;
+                navReferer = 'https://vixsrc.to/';
+                console.log(`[StreamResolver] ⚡ VixSrc direct embed target: ${targetUrl}`);
+              }
+            }
+          } catch {
+            // If check fails due to network, continue to standard browser attempt
+          }
+        }
+
         const page = await context.newPage();
+        await page.setExtraHTTPHeaders({ 'Referer': navReferer }).catch(() => {});
         let capturedUrl: string | undefined;
         let capturedHeaders: Record<string, string> | undefined;
 
         try {
-          console.log(`[StreamResolver] Trying provider ${provider.name}: ${provider.url}`);
+          console.log(`[StreamResolver] Trying provider ${provider.name}: ${targetUrl}`);
 
-          // Stealth & popup blocking
-          await setupStealthPage(page);
+          // Close popups immediately
           page.on('popup', (popup) => { void popup.close().catch(() => {}); });
 
           // Stream detection promise
@@ -214,22 +253,26 @@ class StreamResolver {
               const url = request.url();
               const resourceType = request.resourceType();
               const isThumb = url.includes('.vtt') || url.includes('.jpg') || url.includes('.png');
-              const isM3u8 = (url.includes('.m3u8') || url.includes('playlist') || url.includes('master')) && !isThumb;
-              const isMedia = (resourceType === 'media' || url.includes('.mp4')) && !isThumb;
+              const isPing = url.includes('ping.gif') || url.includes('doubleclick') || url.includes('analytics');
+              
+              const isM3u8Playlist = url.includes('/playlist/') && !isPing && !isThumb;
+              const isDirectM3u8 = (url.includes('.m3u8') || url.includes('master.m3u8')) && !isThumb && !isPing;
+              const isDirectMedia = resourceType === 'media' && (url.includes('.mp4') || url.includes('.m3u8')) && !isThumb;
 
-              if ((isM3u8 || isMedia) && !capturedUrl) {
-                if (!url.includes('doubleclick') && !url.includes('analytics') && !url.includes('google-analytics')) {
-                  capturedUrl = url;
-                  capturedHeaders = request.headers();
-                  resolve({ url, headers: capturedHeaders });
-                }
+              if ((isM3u8Playlist || isDirectM3u8 || isDirectMedia) && !capturedUrl) {
+                capturedUrl = url;
+                capturedHeaders = request.headers();
+                resolve({ url, headers: capturedHeaders });
               }
             });
 
             page.on('response', (res) => {
               const url = res.url();
-              const contentType = res.headers()['content-type'] || '';
-              if ((contentType.includes('application/vnd.apple.mpegurl') || contentType.includes('application/x-mpegurl')) && !capturedUrl) {
+              const isPing = url.includes('ping.gif') || url.includes('analytics');
+              const contentType = (res.headers()['content-type'] || '').toLowerCase();
+              const isMpegUrl = contentType.includes('application/vnd.apple.mpegurl') || contentType.includes('application/x-mpegurl');
+
+              if (isMpegUrl && !isPing && !capturedUrl) {
                 capturedUrl = url;
                 capturedHeaders = res.request().headers();
                 resolve({ url, headers: capturedHeaders });
@@ -237,33 +280,11 @@ class StreamResolver {
             });
           });
 
-          // Navigate to embed
-          await page.goto(provider.url, { waitUntil: 'domcontentloaded', timeout: Math.min(remainingTime - 1000, 10000) });
+          // Navigate to target embed URL
+          const navTimeout = Math.min(remainingTime - 1000, 10000);
+          await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: navTimeout });
 
-          // Emulate human presence
-          await emulateHumanBehavior(page);
-
-          // Trigger player play button if found
-          const frames = page.frames();
-          for (const frame of frames) {
-            try {
-              const playBtn = await frame.$('button, .play, #play, .play-button, [aria-label*="Play"], video');
-              if (playBtn) {
-                const box = await playBtn.boundingBox();
-                if (box) {
-                  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 5 });
-                  await page.mouse.down();
-                  await new Promise((r) => setTimeout(r, 100));
-                  await page.mouse.up();
-                  break;
-                }
-              }
-            } catch {
-              // Frame detached or cross-origin restricted
-            }
-          }
-
-          // Wait for stream with per-provider timeout (max 10s per provider)
+          // Wait for stream to be captured (with per-provider timeout)
           const perProviderTimeout = Math.min(remainingTime - 1000, 10000);
           const result = await Promise.race([
             streamPromise,
@@ -271,9 +292,9 @@ class StreamResolver {
           ]);
 
           if (result) {
-            console.log(`[StreamResolver] ✅ ${provider.name} resolved successfully`);
+            console.log(`[StreamResolver] ✅ ${provider.name} resolved successfully in ${Date.now() - startTime}ms`);
             resolvedResult = { ...result, provider: provider.name };
-            break; // Success — no need to try more providers
+            break; // Success — stop trying further providers
           } else {
             console.log(`[StreamResolver] ❌ ${provider.name} timed out, trying next provider...`);
           }
