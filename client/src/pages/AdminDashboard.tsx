@@ -319,8 +319,8 @@ export function AdminDashboard() {
             <div className="space-y-2.5">
               <p className="text-xs font-semibold uppercase tracking-widest text-dust/60 mb-3">{ar ? 'المزودات' : 'Providers'}</p>
               {[
-                { name: 'VidSrc', desc: ar ? 'الأساسي' : 'Primary', ok: true },
-                { name: 'VixSrc', desc: ar ? 'احتياطي' : 'Fallback', ok: true },
+                { name: 'VixSrc', desc: ar ? 'بث HLS المباشر (الرئيسي)' : 'Native HLS Engine', ok: true },
+                { name: 'VidSrc', desc: ar ? 'مشاهدة جماعية (تضمين)' : 'Watch Party Embed', ok: true },
               ].map((p) => (
                 <div key={p.name} className="flex items-center justify-between rounded-lg bg-white/[0.04] px-4 py-2.5">
                   <div className="flex items-center gap-2.5">

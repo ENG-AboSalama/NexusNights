@@ -8,6 +8,7 @@ import {
   Check,
   Copy,
   Crown,
+  Globe,
   Lock,
   Play,
   Send,
@@ -31,7 +32,7 @@ interface Props {
 }
 
 export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStream, onLeave }: Props) {
-  const { t } = useI18n();
+  const { t, lang, toggle } = useI18n();
   const auth = useAuth();
   const room = useRoom();
 
@@ -49,6 +50,15 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
   const isHost = room.isHost;
   const isConnected = room.connection === 'connected';
 
+  const handleLeave = () => {
+    if (onLeave) {
+      onLeave();
+    } else {
+      room.leaveRoom();
+    }
+    window.location.hash = '#/';
+  };
+
   // Share URL
   const shareUrl = room.roomId
     ? `${window.location.origin}/#/watch/${media?.id || ''}?room=${room.roomId}`
@@ -62,7 +72,9 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
 
   const copyDiscordShare = () => {
     const movieTitle = media?.kind === 'series' ? media?.titleName : media?.title || 'NexusNight';
-    const discordMessage = `🎬 تعال نتفرج سوا على "${movieTitle}" في NexusNight!\nرابط الغرفة: ${shareUrl}`;
+    const discordMessage = lang === 'ar'
+      ? `🎬 تعال نتفرج سوا على "${movieTitle}" في NexusNight!\nرابط الغرفة: ${shareUrl}`
+      : `🎬 Join me to watch "${movieTitle}" on NexusNight!\nRoom link: ${shareUrl}`;
     navigator.clipboard.writeText(discordMessage);
     setCopiedDiscord(true);
     setTimeout(() => setCopiedDiscord(false), 2500);
@@ -82,7 +94,7 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
     setStarting(true);
     setActiveMethod('native');
     setServerStreamError(null);
-    setCaptureStatus('جاري استخراج وتجهيز البث الأصلي...');
+    setCaptureStatus(t('resolvingStream'));
 
     try {
       if (media?.tmdbId && !media?.playback) {
@@ -108,7 +120,7 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
           diagnosticsCount: 0,
         };
 
-        setCaptureStatus('✓ البث جاهز! بدء المشاهدة بالمشغل الأصلي...');
+        setCaptureStatus(t('streamReadyStarting'));
         await new Promise((r) => setTimeout(r, 600));
 
         if (onStart) {
@@ -126,8 +138,8 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
       }
     } catch (err: any) {
       console.error('[WaitingRoom] Failed to resolve native stream:', err);
-      const errorMsg = err instanceof Error ? err.message : 'فشل استخراج البث الأصلي';
-      setServerStreamError(`${errorMsg}. يمكنك استخدام بث شاشة المضيف كخيار بديل.`);
+      const errorMsg = err instanceof Error ? err.message : (lang === 'ar' ? 'فشل استخراج البث الأصلي' : 'Failed to resolve native stream');
+      setServerStreamError(`${errorMsg}. ${lang === 'ar' ? 'يمكنك استخدام بث شاشة المضيف كخيار بديل.' : 'You can use host screen share as fallback.'}`);
       setStarting(false);
       setActiveMethod(null);
       setCaptureStatus(null);
@@ -148,22 +160,22 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
         (streamingConfig?.alternatives?.[0]?.type === 'embed' ? streamingConfig?.alternatives?.[0]?.url : undefined);
 
       if (!embedUrl) {
-        throw new Error('لا يوجد مشغل خارجي متاح لبث الشاشة');
+        throw new Error(lang === 'ar' ? 'لا يوجد مشغل خارجي متاح لبث الشاشة' : 'No external player available for screen share');
       }
 
-      setCaptureStatus('جاري فتح المشغل...');
+      setCaptureStatus(lang === 'ar' ? 'جاري فتح المشغل...' : 'Opening player…');
       const proxyUrl = `/api/proxy/embed?url=${encodeURIComponent(embedUrl)}`;
 
       const { openEmbedPopup, capturePopupVideo } = await import('../streaming/embed-popup');
       const popup = openEmbedPopup(proxyUrl);
       if (!popup) {
-        throw new Error('فشل فتح نافذة المشغل. يرجى السماح بالنوافذ المنبثقة.');
+        throw new Error(lang === 'ar' ? 'فشل فتح نافذة المشغل. يرجى السماح بالنوافذ المنبثقة.' : 'Failed to open player window. Please allow popups.');
       }
 
-      setCaptureStatus('اختر نافذة المشغل لبدء البث...');
+      setCaptureStatus(lang === 'ar' ? 'اختر نافذة المشغل لبدء البث...' : 'Select the player window to start streaming…');
       const stream = await capturePopupVideo(popup, 30000);
 
-      setCaptureStatus('✓ تم التقاط الشاشة! جاري البث للخادم...');
+      setCaptureStatus(lang === 'ar' ? '✓ تم التقاط الشاشة! جاري البث للخادم...' : '✓ Screen captured! Streaming to server…');
       const { WebSocketStreamer } = await import('../streaming/websocket-streamer');
       const streamer = new WebSocketStreamer({
         roomId: room.roomId,
@@ -174,7 +186,7 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
       await streamer.start(token);
 
       const hlsUrl = `/hls/${room.roomId}/index.m3u8`;
-      setCaptureStatus('جاري تجهيز البث للمشاهدين...');
+      setCaptureStatus(lang === 'ar' ? 'جاري تجهيز البث للمشاهدين...' : 'Preparing stream for viewers…');
 
       for (let i = 0; i < 25; i++) {
         await new Promise((r) => setTimeout(r, 500));
@@ -187,7 +199,7 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
         } catch {}
       }
 
-      setCaptureStatus('✓ البث جاهز! بدء المشاهدة...');
+      setCaptureStatus(t('streamReadyStarting'));
       if (onStartServerStream) {
         onStartServerStream(hlsUrl);
       }
@@ -195,7 +207,7 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
       setCaptureStatus(null);
     } catch (err: any) {
       console.error('[WaitingRoom] Failed to start screen share:', err);
-      const errorMsg = err instanceof Error ? err.message : 'فشل بدء بث الشاشة';
+      const errorMsg = err instanceof Error ? err.message : t('streamShareFailed');
       setServerStreamError(errorMsg);
       setStarting(false);
       setActiveMethod(null);
@@ -225,7 +237,10 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
   const yearStr = media?.airDate ? new Date(media.airDate).getFullYear() : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-ink text-bone overflow-hidden select-none">
+    <div
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+      className="fixed inset-0 z-50 flex flex-col bg-ink text-bone overflow-hidden select-none"
+    >
       {/* ── Ambient Blurred Backdrop ── */}
       {bgImage && (
         <div
@@ -236,30 +251,44 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
       <div className="pointer-events-none fixed inset-0 bg-gradient-to-t from-ink via-ink/80 to-ink/40" />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-transparent via-ink/60 to-ink" />
 
-      {/* ── Top Bar ── */}
-      <header className="relative z-10 flex items-center justify-between border-b border-white/10 bg-ink/60 px-6 py-4 backdrop-blur-md">
+      {/* ── Top Bar (Standard NexusNight Brand) ── */}
+      <header className="relative z-10 flex items-center justify-between border-b border-white/10 bg-ink/75 px-4 sm:px-6 py-3 sm:py-3.5 backdrop-blur-xl">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-xl bg-gilt/15 text-gilt shadow-[0_0_15px_rgba(212,175,55,0.2)]">
-            <Sigil className="size-6 text-gilt animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-display text-base font-bold tracking-wider text-bone">
-                NEXUS<span className="text-gilt">NIGHT</span>
-              </span>
-              <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[0.65rem] font-semibold text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <span className="size-1.5 rounded-full bg-emerald-400 animate-ping" />
-                {t('roomLive')}
-              </span>
-            </div>
-            <p className="text-xs text-dust">{t('waitingRoomTitle')}</p>
+          <a href="#/" className="group flex items-center gap-2" aria-label="Home">
+            <Sigil className="size-7 text-blood-hot transition-transform duration-500 group-hover:rotate-180" />
+            <span lang="en" dir="ltr" className="font-[Cinzel] text-[1.45rem] font-extrabold tracking-[0.02em] text-bone">
+              <span className="text-blood-hot">NEXUS</span>
+              <span className="text-gilt">NIGHT</span>
+            </span>
+          </a>
+
+          <div className="hidden sm:block h-5 w-[1px] bg-white/10 mx-1" />
+
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[0.7rem] font-semibold text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {t('roomLive')}
+            </span>
+            <span className="text-xs text-dust">{t('waitingRoomTitle')}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {/* Language Switcher */}
           <button
-            onClick={onLeave || room.leaveRoom}
-            className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-2 text-xs font-medium text-dust transition hover:border-blood/40 hover:bg-blood/15 hover:text-blood-hot"
+            onClick={toggle}
+            className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-dust transition hover:border-gilt/40 hover:text-bone"
+            title={t('language')}
+          >
+            <Globe className="size-3.5 text-gilt" />
+            <span className="font-sans">{lang === 'ar' ? 'English' : 'العربية'}</span>
+          </button>
+
+          {/* Leave Room Button */}
+          <button
+            onClick={handleLeave}
+            className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-dust transition hover:border-blood/40 hover:bg-blood/15 hover:text-blood-hot active:scale-95"
+            title={t('leaveRoom')}
           >
             <X className="size-4" />
             <span>{t('leaveRoom')}</span>
@@ -414,7 +443,7 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
                             )}
                           </div>
                           <span className="text-[0.65rem] text-dust">
-                            {m.isHost ? t('host') : m.canControl ? t('hostControlOnly') : 'Viewer'}
+                            {m.isHost ? t('host') : m.canControl ? t('hostControlOnly') : t('viewer')}
                           </span>
                         </div>
                       </div>
@@ -553,11 +582,11 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
                       className="group relative flex items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-blood to-blood-hot px-6 py-3.5 font-display text-sm font-bold tracking-wide text-white shadow-[0_0_25px_rgba(186,24,27,0.5)] transition duration-200 hover:scale-[1.03] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
                     >
                       {starting && activeMethod === 'native' ? (
-                        <Spinner className="size-5 text-white" />
+                        <Spinner className="size-5 text-white animate-spin" />
                       ) : (
                         <Zap className="size-5 text-gilt fill-gilt transition group-hover:scale-110" />
                       )}
-                      <span>بدء البث التلقائي (المشغل الأصلي)</span>
+                      <span>{t('startAutoStreamNative')}</span>
                     </button>
 
                     {/* Option 2: Host Screen Share (Manual Fallback) */}
@@ -565,14 +594,14 @@ export function WaitingRoom({ media, streamingConfig, onStart, onStartServerStre
                       onClick={handleStartScreenShare}
                       disabled={starting || !isConnected}
                       className="flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/5 hover:bg-white/10 px-4 py-3.5 font-display text-xs font-semibold text-bone transition hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-                      title="بث شاشة المضيف يدوياً عبر النافذة المنبثقة"
+                      title={t('screenShareDesc')}
                     >
                       {starting && activeMethod === 'screenshare' ? (
-                        <Spinner className="size-4 text-dust" />
+                        <Spinner className="size-4 text-dust animate-spin" />
                       ) : (
                         <Tv className="size-4 text-dust" />
                       )}
-                      <span>بث شاشة المضيف (يدوي)</span>
+                      <span>{t('startScreenShareManual')}</span>
                     </button>
                   </>
                 ) : (

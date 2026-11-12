@@ -79,7 +79,9 @@ function parseRoomParams() {
   const qIdx = hash.indexOf('?');
   const hashSearch = qIdx !== -1 ? new URLSearchParams(hash.substring(qIdx)) : null;
 
-  const room = hashSearch?.get('room') || search.get('room') || null;
+  // Discord Activity passes channel_id or instance_id when launched in a voice channel
+  const discordChannel = search.get('channel_id') || hashSearch?.get('channel_id') || search.get('instance_id') || hashSearch?.get('instance_id');
+  const room = hashSearch?.get('room') || search.get('room') || (discordChannel ? `dc-${discordChannel}` : null);
   const name = hashSearch?.get('name') || search.get('name') || null;
   const invite = hashSearch?.get('invite') || search.get('invite') || null;
 

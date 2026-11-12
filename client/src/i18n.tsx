@@ -241,7 +241,27 @@ const en = {
   nativeStreamLoadingHint: 'The server is fetching the highest quality, ad-free stream…',
   nativeStreamActive: 'Direct Stream',
   nativeStreamFallback: 'Switching to fallback player…',
+  startAutoStreamNative: 'Start Auto Stream (Native Player)',
+  startScreenShareManual: 'Host Screen Share (Manual)',
+  screenShareDesc: 'Manual host screen share via pop-up',
+  resolvingStream: 'Extracting and preparing direct stream…',
+  streamReadyStarting: '✓ Stream ready! Launching native player…',
+  streamShareFailed: 'Failed to start screen share',
+  viewer: 'Viewer',
   
+  // Discord Activity
+  discordActivity: 'Discord Activity',
+  discordActivityHint: 'Synchronized watch party directly in Discord Voice',
+  streamInVoice: 'Stream in Voice',
+  voiceConnected: 'Voice Room Connected',
+  voicePartyReady: 'Discord Watch Party Ready',
+  inviteVoiceFriends: 'Copy Invite Link',
+  discordNowPlaying: 'Now Streaming in Voice',
+  discordBrowseMedia: 'Browse Library',
+  discordRoomMembers: 'Voice Members',
+  searchShowsOrMovies: 'Search movies & shows to watch together…',
+  noVoiceRoomSelected: 'No active voice room. Select a title to begin streaming!',
+
   // Host Control Panel
   currentTime: 'Current Time',  status: 'Status',
   playing: 'Playing',
@@ -503,6 +523,27 @@ const ar: Dict = {
   nativeStreamLoadingHint: 'جاري استخراج أعلى جودة بدون إعلانات من السيرفر...',
   nativeStreamActive: 'بث مباشر',
   nativeStreamFallback: 'جاري التحويل للمشغل الاحتياطي...',
+  startAutoStreamNative: 'بدء البث التلقائي (المشغل الأصلي)',
+  startScreenShareManual: 'بث شاشة المضيف (يدوي)',
+  screenShareDesc: 'بث شاشة المضيف يدوياً عبر النافذة المنبثقة',
+  resolvingStream: 'جاري استخراج وتجهيز البث الأصلي…',
+  streamReadyStarting: '✓ البث جاهز! بدء المشاهدة بالمشغل الأصلي…',
+  streamShareFailed: 'فشل بدء بث الشاشة',
+  viewer: 'مشاهد',
+  
+  // Discord Activity
+  discordActivity: 'نشاط ديسكورد',
+  discordActivityHint: 'مشاهدة جماعية متزامنة مباشرة في قنوات ديسكورد الصوتية',
+  streamInVoice: 'تشغيل في القناة الصوتية',
+  voiceConnected: 'متصل بغرفة الصوت',
+  voicePartyReady: 'مشاهدة ديسكورد جاهزة',
+  inviteVoiceFriends: 'نسخ رابط الدعوة',
+  discordNowPlaying: 'يعرض الآن في القناة الصوتية',
+  discordBrowseMedia: 'تصفح العروض',
+  discordRoomMembers: 'أعضاء الصوت',
+  searchShowsOrMovies: 'ابحث عن أفلام ومسلسلات للمشاهدة معًا...',
+  noVoiceRoomSelected: 'لا توجد غرفة صوتية نشطة حالياً. اختر عملاً لبدء البث!',
+
   videoInPopupWindow: 'الفيديو في نافذة منبثقة',
 };
 

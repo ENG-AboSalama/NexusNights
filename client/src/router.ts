@@ -8,11 +8,17 @@ export type Route =
   | { name: 'embed-poc' }
   | { name: 'providers' }
   | { name: 'discover-rooms' }
-  | { name: 'admin-dashboard' };
+  | { name: 'admin-dashboard' }
+  | { name: 'discord' };
 
 function parse(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('?')[0].split('/').filter(Boolean);
   
+  // Discord Activity Mode
+  if (parts[0] === 'discord' || parts[0] === 'activity') {
+    return { name: 'discord' };
+  }
+
   // Admin Dashboard
   if (parts[0] === 'admin' || parts[0] === 'dashboard' || parts[0] === 'admin-dashboard') {
     return { name: 'admin-dashboard' };
@@ -78,6 +84,7 @@ export const go = {
   providers: () => { location.hash = '#/providers'; },
   discoverRooms: () => { location.hash = '#/rooms'; },
   adminDashboard: () => { location.hash = '#/admin'; },
+  discord: (room?: string) => { location.hash = room ? `#/discord?room=${encodeURIComponent(room)}` : '#/discord'; },
   globalTitle: (kind: 'movie' | 'series', tmdbId: number) => { 
     location.hash = `#/${kind === 'movie' ? 'movie' : 'tv'}/${tmdbId}`; 
   },
@@ -90,6 +97,7 @@ export const hrefs = {
   providers: '#/providers',
   discoverRooms: '#/rooms',
   adminDashboard: '#/admin',
+  discord: '#/discord',
   globalTitle: (kind: 'movie' | 'series', tmdbId: number) => 
     `#/${kind === 'movie' ? 'movie' : 'tv'}/${tmdbId}`,
 };

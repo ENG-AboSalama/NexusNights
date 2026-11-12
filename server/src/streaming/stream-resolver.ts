@@ -4,7 +4,7 @@
  * and caches results in memory for high-performance instant access.
  */
 
-import { chromium, type BrowserContext } from 'playwright';
+import { chromium, type Browser, type BrowserContext } from 'playwright';
 import fs from 'fs';
 import { setupStealthPage, emulateHumanBehavior } from './stealth-config';
 
@@ -143,17 +143,17 @@ class StreamResolver {
     const timeoutMs = 25000;
     const browserPath = this.getBrowserPath();
 
-    // Construct embed target URLs — try VidSrc first (primary), then VixSrc as fallback
+    // Construct embed target URLs — VixSrc provides direct HLS (.m3u8), VidSrc as fallback
     const providers: Array<{ name: string; url: string; referer: string }> = [];
 
     if (req.kind === 'series') {
       const s = req.season ?? 1;
       const e = req.episode ?? 1;
-      providers.push({ name: 'VidSrc', url: `https://vidsrc.to/embed/tv/${req.tmdbId}/${s}/${e}`, referer: 'https://vidsrc.to/' });
       providers.push({ name: 'VixSrc', url: `https://vixsrc.to/tv/${req.tmdbId}/${s}/${e}`, referer: 'https://vixsrc.to/' });
+      providers.push({ name: 'VidSrc', url: `https://vidsrc.to/embed/tv/${req.tmdbId}/${s}/${e}`, referer: 'https://vidsrc.to/' });
     } else {
-      providers.push({ name: 'VidSrc', url: `https://vidsrc.to/embed/movie/${req.tmdbId}`, referer: 'https://vidsrc.to/' });
       providers.push({ name: 'VixSrc', url: `https://vixsrc.to/movie/${req.tmdbId}`, referer: 'https://vixsrc.to/' });
+      providers.push({ name: 'VidSrc', url: `https://vidsrc.to/embed/movie/${req.tmdbId}`, referer: 'https://vidsrc.to/' });
     }
 
     console.log(`[StreamResolver] Starting stealth sniff — will try ${providers.length} providers`);
@@ -161,6 +161,7 @@ class StreamResolver {
     console.log(`[StreamResolver] Active browsers: ${this.activeBrowsers}/${this.MAX_CONCURRENT_BROWSERS}`);
 
     this.activeBrowsers++;
+    let browser: Browser | null = null;
     let context: BrowserContext | null = null;
 
     try {
@@ -180,7 +181,7 @@ class StreamResolver {
         launchOptions.executablePath = browserPath;
       }
 
-      const browser = await chromium.launch(launchOptions);
+      browser = await chromium.launch(launchOptions);
       context = await browser.newContext({
         viewport: { width: 1920, height: 1080 },
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -237,7 +238,7 @@ class StreamResolver {
           });
 
           // Navigate to embed
-          await page.goto(provider.url, { waitUntil: 'domcontentloaded', timeout: Math.min(remainingTime - 1000, 15000) });
+          await page.goto(provider.url, { waitUntil: 'domcontentloaded', timeout: Math.min(remainingTime - 1000, 10000) });
 
           // Emulate human presence
           await emulateHumanBehavior(page);
@@ -262,8 +263,8 @@ class StreamResolver {
             }
           }
 
-          // Wait for stream with per-provider timeout
-          const perProviderTimeout = Math.min(remainingTime - 1000, 15000);
+          // Wait for stream with per-provider timeout (max 10s per provider)
+          const perProviderTimeout = Math.min(remainingTime - 1000, 10000);
           const result = await Promise.race([
             streamPromise,
             new Promise<null>((r) => setTimeout(() => r(null), perProviderTimeout)),
@@ -307,6 +308,9 @@ class StreamResolver {
       this.activeBrowsers--;
       if (context) {
         await context.close().catch(() => {});
+      }
+      if (browser) {
+        await browser.close().catch(() => {});
       }
     }
   }

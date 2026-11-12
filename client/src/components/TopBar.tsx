@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { PeoplePanel } from '../room/PeoplePanel';
 import { useRoom } from '../room/RoomContext';
 import { AvatarStack } from './Avatar';
-import { Close, Globe, Sigil, Spinner, Users } from './Icons';
+import { Close, Discord, Globe, Sigil, Spinner, Users } from './Icons';
 import { SearchBar } from './SearchBar';
 
 export function TopBar() {

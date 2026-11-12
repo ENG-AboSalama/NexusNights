@@ -15,6 +15,7 @@ import { UniversalEmbedPlayer } from './player/embed/UniversalEmbedPlayer';
 import { ProvidersDashboard } from './pages/ProvidersDashboard';
 import { DiscoverRooms } from './pages/DiscoverRooms';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { DiscordActivity } from './pages/DiscordActivity';
 import { go, useRoute } from './router';
 
 /** Shown when a non-admin tries to access an admin-only page */
@@ -41,12 +42,13 @@ function Routes() {
     if (!room.active || room.connection !== 'connected') { last.current = null; return; }
     if (mediaId && mediaId !== last.current) {
       last.current = mediaId;
-      if (!(route.name === 'watch' && route.id === mediaId)) {
+      if (!(route.name === 'watch' && route.id === mediaId) && route.name !== 'discord') {
         window.location.hash = room.roomId ? `#/watch/${mediaId}?room=${room.roomId}` : `#/watch/${mediaId}`;
       }
     }
   }, [mediaId, room.active, room.connection, room.roomId, route]);
 
+  if (route.name === 'discord') return <DiscordActivity />;
   if (route.name === 'watch') return <Watch key={route.id} id={route.id} />;
   if (route.name === 'embed-poc') {
     return (
