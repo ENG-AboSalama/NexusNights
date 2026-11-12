@@ -208,41 +208,7 @@ class StreamResolver {
         const remainingTime = timeoutMs - (Date.now() - startTime);
         if (remainingTime < 3000) break; // Not enough time left
 
-        let targetUrl = provider.url;
-        let navReferer = provider.referer;
-
-        // Pre-check for VixSrc: fast 1-second check to see if title exists (avoid 10s timeout on 404)
-        if (provider.name === 'VixSrc') {
-          try {
-            const apiPath = req.kind === 'series'
-              ? `tv/${req.tmdbId}/${req.season ?? 1}/${req.episode ?? 1}`
-              : `movie/${req.tmdbId}`;
-            const checkRes = await fetch(`https://vixsrc.to/api/${apiPath}`, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                'Referer': provider.url,
-              },
-              signal: AbortSignal.timeout(5000),
-            });
-            if (checkRes.status === 404) {
-              console.log(`[StreamResolver] ℹ️ VixSrc does not have this title (404), skipping...`);
-              continue;
-            }
-            if (checkRes.ok) {
-              const apiData: any = await checkRes.json().catch(() => null);
-              if (apiData?.src) {
-                targetUrl = `https://vixsrc.to${apiData.src}`;
-                navReferer = 'https://vixsrc.to/';
-                console.log(`[StreamResolver] ⚡ VixSrc direct embed target: ${targetUrl}`);
-              }
-            }
-          } catch {
-            // If check fails due to network, continue to standard browser attempt
-          }
-        }
-
         const page = await context.newPage();
-        await page.setExtraHTTPHeaders({ 'Referer': navReferer }).catch(() => {});
 
         // Save RAM on low-memory servers (1GB RAM): abort images and fonts
         await page.route('**/*', (route) => {
@@ -252,6 +218,40 @@ class StreamResolver {
           }
           return route.continue();
         }).catch(() => {});
+
+        let targetUrl = provider.url;
+        let navReferer = provider.referer;
+
+        // Pre-check for VixSrc: fetch direct embed URL using the browser itself to bypass Cloudflare/TLS blocks
+        if (provider.name === 'VixSrc') {
+          try {
+            const apiPath = req.kind === 'series'
+              ? `tv/${req.tmdbId}/${req.season ?? 1}/${req.episode ?? 1}`
+              : `movie/${req.tmdbId}`;
+            const apiUrl = `https://vixsrc.to/api/${apiPath}`;
+            
+            console.log(`[StreamResolver] Checking VixSrc API: ${apiUrl}`);
+            const apiRes = await page.goto(apiUrl, { waitUntil: 'domcontentloaded', timeout: 5000 });
+            if (apiRes && apiRes.status() === 404) {
+              console.log(`[StreamResolver] ℹ️ VixSrc does not have this title (404), skipping...`);
+              await page.close().catch(() => {});
+              continue;
+            }
+            if (apiRes && apiRes.ok()) {
+              const bodyText = await page.textContent('body');
+              const apiData = JSON.parse(bodyText || '{}');
+              if (apiData?.src) {
+                targetUrl = `https://vixsrc.to${apiData.src}`;
+                navReferer = provider.url;
+                console.log(`[StreamResolver] ⚡ VixSrc direct embed target: ${targetUrl}`);
+              }
+            }
+          } catch (err: any) {
+            console.log(`[StreamResolver] ⚠️ VixSrc API check warning: ${err.message}`);
+          }
+        }
+
+        await page.setExtraHTTPHeaders({ 'Referer': navReferer }).catch(() => {});
 
         let capturedUrl: string | undefined;
         let capturedHeaders: Record<string, string> | undefined;
@@ -297,7 +297,7 @@ class StreamResolver {
 
           // Navigate to target embed URL
           const navTimeout = Math.min(remainingTime - 1000, maxPerProviderMs);
-          await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: navTimeout });
+          await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: navTimeout, referer: navReferer });
 
           // Wait for stream to be captured (with per-provider timeout)
           const perProviderTimeout = Math.min(remainingTime - 1000, maxPerProviderMs);
