@@ -181,7 +181,10 @@ class StreamResolver {
           '--mute-audio',
           '--disable-web-security',
           '--disable-blink-features=AutomationControlled',
-          '--window-size=1280,720',
+          '--window-size=800,600',
+          '--js-flags=--max-old-space-size=128',
+          '--disk-cache-size=1',
+          '--media-cache-size=1',
         ],
       };
 
@@ -191,7 +194,7 @@ class StreamResolver {
 
       browser = await chromium.launch(launchOptions);
       context = await browser.newContext({
-        viewport: { width: 1280, height: 720 },
+        viewport: { width: 800, height: 600 },
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         locale: 'en-US',
         timezoneId: 'America/New_York',
@@ -240,6 +243,16 @@ class StreamResolver {
 
         const page = await context.newPage();
         await page.setExtraHTTPHeaders({ 'Referer': navReferer }).catch(() => {});
+
+        // Save RAM on low-memory servers (1GB RAM): abort images and fonts
+        await page.route('**/*', (route) => {
+          const type = route.request().resourceType();
+          if (type === 'image' || type === 'font') {
+            return route.abort();
+          }
+          return route.continue();
+        }).catch(() => {});
+
         let capturedUrl: string | undefined;
         let capturedHeaders: Record<string, string> | undefined;
 
