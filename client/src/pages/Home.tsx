@@ -6,6 +6,7 @@ import { Hero } from '../components/Hero';
 import { Row } from '../components/Row';
 import { HeroSkeleton, RowSkeleton } from '../components/Skeleton';
 import { ErrorState } from '../components/States';
+import { DiscordActivityBanner } from '../components/DiscordActivityBanner';
 import { useAsync } from '../hooks';
 import { useI18n } from '../i18n';
 import { allProgress, continueIds, getProgress, progressVersion, subscribeProgress } from '../progress';
@@ -53,7 +54,7 @@ export function Home() {
   };
 
   return (
-    <div className="pb-16">
+    <div className="pb-4">
       {hero && <Hero hero={hero} fallbackImage={fallbackStill} resumable={!!resumeId} onPlay={play} onInfo={() => go.title(hero.id)} />}
       <div className="relative z-10 -mt-14 space-y-1 sm:-mt-20">
         {contItems.length > 0 && (
@@ -75,6 +76,10 @@ export function Home() {
             </Row>
           ) : null,
         )}
+      </div>
+      {/* Discord Activity Banner — bottom of page */}
+      <div className="px-[var(--pad)] pb-16 pt-6">
+        <DiscordActivityBanner />
       </div>
     </div>
   );

@@ -259,8 +259,12 @@ const en = {
   discordNowPlaying: 'Now Streaming in Voice',
   discordBrowseMedia: 'Browse Library',
   discordRoomMembers: 'Voice Members',
-  searchShowsOrMovies: 'Search movies & shows to watch together…',
-  noVoiceRoomSelected: 'No active voice room. Select a title to begin streaming!',
+  with: 'with',
+  friend: 'friend',
+  friends: 'friends',
+  watchingAlone: 'Watching alone',
+  noVoiceRoomSelected: 'No Media Playing',
+  searchShowsOrMovies: 'Search shows or movies…',
 
   // Host Control Panel
   currentTime: 'Current Time',  status: 'Status',
@@ -541,8 +545,12 @@ const ar: Dict = {
   discordNowPlaying: 'يعرض الآن في القناة الصوتية',
   discordBrowseMedia: 'تصفح العروض',
   discordRoomMembers: 'أعضاء الصوت',
-  searchShowsOrMovies: 'ابحث عن أفلام ومسلسلات للمشاهدة معًا...',
-  noVoiceRoomSelected: 'لا توجد غرفة صوتية نشطة حالياً. اختر عملاً لبدء البث!',
+  with: 'مع',
+  friend: 'صديق',
+  friends: 'أصدقاء',
+  watchingAlone: 'تشاهد بمفردك',
+  noVoiceRoomSelected: 'لا يوجد محتوى قيد التشغيل',
+  searchShowsOrMovies: 'ابحث عن مسلسلات أو أفلام...',
 
   videoInPopupWindow: 'الفيديو في نافذة منبثقة',
 };

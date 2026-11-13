@@ -22,5 +22,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
+  },
+  "dependencies": {
+    "@discord/embedded-app-sdk": "^2.5.0"
   }
 }

@@ -54,6 +54,11 @@ export const Activity = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="M22 
 export const BarChart = (p: P<SVGSVGElement>) => <svg {...base(p)}><path d="M12 20V10M18 20V4M6 20v-4" /></svg>;
 export const Zap = (p: P<SVGSVGElement>) => <svg {...base(p)}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor" /></svg>;
 export const Tv = (p: P<SVGSVGElement>) => <svg {...base(p)}><rect x="2" y="7" width="20" height="15" rx="2" ry="2" /><polyline points="17 2 12 7 7 2" /></svg>;
+export const Menu = (p: P<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+);
 export const Search = (p: P<SVGSVGElement>) => (
   <svg {...base(p)}>
     <circle cx="11" cy="11" r="8" />

@@ -66,14 +66,56 @@ export class PlaybackOrchestrator {
   }
 
   /**
+   * Check if content is Turkish via TMDB
+   */
+  private async isTurkishContent(tmdbId: number, kind: 'movie' | 'series'): Promise<boolean> {
+    const TMDB_API_KEY = process.env.TMDB_API_KEY;
+    if (!TMDB_API_KEY) {
+      console.warn('[PlaybackOrchestrator] TMDB_API_KEY not set, cannot detect Turkish content');
+      return false;
+    }
+
+    try {
+      const endpoint = kind === 'movie' ? 'movie' : 'tv';
+      const isBearer = TMDB_API_KEY.startsWith('eyJ');
+      const headers: Record<string, string> = isBearer ? { Authorization: `Bearer ${TMDB_API_KEY}` } : {};
+      const apiParam = isBearer ? '' : `?api_key=${TMDB_API_KEY}`;
+      
+      const url = `https://api.themoviedb.org/3/${endpoint}/${tmdbId}${apiParam}`;
+      const response = await fetch(url, { headers: Object.keys(headers).length > 0 ? headers : undefined });
+      
+      if (!response.ok) return false;
+      
+      const data = await response.json() as { original_language?: string };
+      return data.original_language === 'tr';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Query supported providers, validate and rank sources
    */
   private async orchestrate(req: ProviderMediaRequest): Promise<PlaybackConfig> {
-    const activeProviders = this.registry.getActive().filter((p) =>
+    let activeProviders = this.registry.getActive().filter((p) =>
       p.supportedTypes.includes(req.kind)
     );
 
     const diagnostics: PlaybackDiagnostic[] = [];
+
+    // Turkish content optimization: use Dizibal exclusively
+    const isTurkish = await this.isTurkishContent(req.tmdbId, req.kind);
+    if (isTurkish) {
+      const dizibal = activeProviders.find((p) => p.id === 'dizibal');
+      if (dizibal) {
+        activeProviders = [dizibal];
+        diagnostics.push({
+          code: 'TURKISH_CONTENT_DETECTED',
+          message: 'Turkish content detected - using Dizibal provider exclusively for optimal streaming',
+          severity: 'info',
+        });
+      }
+    }
 
     // Note disabled providers in diagnostics
     const disabled = this.registry.getSupported().filter((p) => !this.registry.isEnabled(p.id));
@@ -241,6 +283,9 @@ export class PlaybackOrchestrator {
       provider: source.providerName,
       isEmbed: source.isEmbed,
       audioTracks: source.audioTracks,
+      id: source.id, // Keep for proxy registration
+      headers: source.headers, // Keep for proxy
+      subtitles: source.subtitles, // Keep provider subtitles
     };
   }
 

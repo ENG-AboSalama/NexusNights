@@ -25,6 +25,8 @@ export interface ProviderSource {
   isEmbed: boolean;
   priority: number;
   audioTracks?: Array<{ language: string; label: string }>;
+  headers?: Record<string, string>; // Required headers for stream access (e.g., Referer, Origin)
+  subtitles?: Array<{ url: string; language: string; label: string }>; // Provider-specific subtitles
 }
 
 export interface ProviderResult {
@@ -53,6 +55,11 @@ export interface PlaybackSource {
   provider: string;
   isEmbed: boolean;
   audioTracks?: Array<{ language: string; label: string }>;
+  
+  // Provider metadata (for proxy registration)
+  id?: string;
+  headers?: Record<string, string>;
+  subtitles?: Array<{ url: string; language: string; label: string }>;
 }
 
 export interface PlaybackSubtitle {

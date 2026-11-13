@@ -12,14 +12,77 @@ import path from 'node:path';
 import { Presenter, resolveLang, langToTmdb } from './present';
 import { playbackOrchestrator } from '../streaming/playback-orchestrator';
 import { providerRegistry } from '../streaming/provider-registry';
+import { providerHealth } from '../streaming/provider-health';
+import type { PlaybackConfig, ProviderSource } from '../streaming/types';
 import type { PlaybackConfigPublic, PlaybackSourcePublic, GlobalHomeResponse, GlobalHomeSection } from './api-types';
 import { DiscoveryPresenter } from '../tmdb/discovery-presenter';
 import { streamResolver } from '../streaming/stream-resolver';
 import { streamProxyRouter } from '../streaming/stream-proxy';
+import { providerStreamProxyRouter, registerProviderStream } from '../streaming/provider-stream-proxy';
+import { analyticsTracker } from '../analytics/tracker';
 
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res, next) => {
   fn(req, res).catch(next);
 };
+
+/**
+ * Register provider sources that need proxying (HLS with headers) and rewrite URLs
+ */
+function prepareProviderSources(config: PlaybackConfig): void {
+  // Register and rewrite main source
+  if (config.source && config.source.type === 'hls' && config.source.headers && config.source.id) {
+    const originalUrl = config.source.url;
+    
+    // Convert PlaybackSource back to ProviderSource for registration
+    const providerSource: ProviderSource = {
+      id: config.source.id,
+      url: config.source.url,
+      type: config.source.type,
+      quality: config.source.quality,
+      providerId: config.source.id.split('-')[0], // Extract from id (e.g., "dizibal-series-123")
+      providerName: config.source.provider,
+      isEmbed: config.source.isEmbed,
+      priority: 0, // Not used for registered streams
+      headers: config.source.headers,
+      subtitles: config.source.subtitles,
+    };
+    
+    registerProviderStream(providerSource);
+    config.source.url = `/api/provider-stream-proxy/master/${config.source.id}.m3u8`;
+    
+    console.log(`[PrepareProviderSources] Registered ${config.source.provider}: ${originalUrl.substring(0, 80)}... -> ${config.source.url}`);
+    
+    // Also include provider subtitles in global subtitles
+    if (config.source.subtitles) {
+      config.subtitles = [...config.subtitles, ...config.source.subtitles];
+    }
+  }
+  
+  // Register and rewrite alternatives
+  for (const alt of config.alternatives) {
+    if (alt.type === 'hls' && alt.headers && alt.id) {
+      const originalUrl = alt.url;
+      
+      const providerSource: ProviderSource = {
+        id: alt.id,
+        url: alt.url,
+        type: alt.type,
+        quality: alt.quality,
+        providerId: alt.id.split('-')[0],
+        providerName: alt.provider,
+        isEmbed: alt.isEmbed,
+        priority: 0,
+        headers: alt.headers,
+        subtitles: alt.subtitles,
+      };
+      
+      registerProviderStream(providerSource);
+      alt.url = `/api/provider-stream-proxy/master/${alt.id}.m3u8`;
+      
+      console.log(`[PrepareProviderSources] Registered alt ${alt.provider}: ${originalUrl.substring(0, 80)}... -> ${alt.url}`);
+    }
+  }
+}
 
 const notFound = (res: Response) => res.status(404).json({ error: 'not_found' });
 const FILE_OPTS = { maxAge: '7d', immutable: true, dotfiles: 'allow' as const };
@@ -264,6 +327,16 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
       // Resolve streaming sources from Custom Multi-Provider System
       const config = await playbackOrchestrator.resolveMovie(tmdbId, undefined, localTitle?.id);
       
+      // Track streaming activity
+      const clientIP = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 
+                       (req.headers['x-real-ip'] as string) || 
+                       req.socket.remoteAddress || 
+                       'unknown';
+      analyticsTracker.trackRequest(clientIP, true);
+      
+      // Register provider streams and rewrite URLs for proxying
+      prepareProviderSources(config);
+      
       // Build response
       const playbackConfig: PlaybackConfigPublic = {
         source: config.source,
@@ -276,15 +349,22 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
       };
 
       // Automatic on-demand native HLS stream resolution
+      // Skip sniffer if we already have direct HLS/MP4 sources from providers (e.g., Dizibal)
+      const hasDirectSource = config.source && !config.source.isEmbed;
       const snifferEnabled = process.env.ENABLE_STREAM_SNIFFER !== 'false' && process.env.DISABLE_SNIFFER !== 'true';
       let nativeStream = snifferEnabled ? streamResolver.getCached({ tmdbId, kind: 'movie' }) : undefined;
-      if (!nativeStream && !localMediaId && snifferEnabled) {
+      
+      if (!nativeStream && !localMediaId && snifferEnabled && !hasDirectSource) {
         try {
           console.log(`[Playback] Auto-resolving native direct stream for movie ${tmdbId}...`);
           nativeStream = await streamResolver.resolve({ tmdbId, kind: 'movie' });
         } catch (sniffErr: any) {
           console.warn(`[Playback] Native auto-resolve fallback to embed for movie ${tmdbId}:`, sniffErr.message);
         }
+      }
+
+      if (hasDirectSource) {
+        console.log(`[Playback] Using direct ${config.source!.type.toUpperCase()} source from ${config.source!.provider}, skipping sniffer`);
       }
 
       if (nativeStream) {
@@ -398,6 +478,16 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
       // Resolve streaming sources from Custom Multi-Provider System
       const config = await playbackOrchestrator.resolveTV(tmdbId, season, episode, undefined, localTitle?.id);
       
+      // Track streaming activity
+      const clientIP = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 
+                       (req.headers['x-real-ip'] as string) || 
+                       req.socket.remoteAddress || 
+                       'unknown';
+      analyticsTracker.trackRequest(clientIP, true);
+      
+      // Register provider streams and rewrite URLs for proxying
+      prepareProviderSources(config);
+      
       // Build response
       const playbackConfig: PlaybackConfigPublic = {
         source: config.source,
@@ -410,15 +500,22 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
       };
 
       // Automatic on-demand native HLS stream resolution for TV series
+      // Skip sniffer if we already have direct HLS/MP4 sources from providers (e.g., Dizibal)
+      const hasDirectSource = config.source && !config.source.isEmbed;
       const snifferEnabled = process.env.ENABLE_STREAM_SNIFFER !== 'false' && process.env.DISABLE_SNIFFER !== 'true';
       let nativeStream = snifferEnabled ? streamResolver.getCached({ tmdbId, kind: 'series', season, episode }) : undefined;
-      if (!nativeStream && !localMediaId && snifferEnabled) {
+      
+      if (!nativeStream && !localMediaId && snifferEnabled && !hasDirectSource) {
         try {
           console.log(`[Playback] Auto-resolving native direct stream for TV ${tmdbId} S${season}E${episode}...`);
           nativeStream = await streamResolver.resolve({ tmdbId, kind: 'series', season, episode });
         } catch (sniffErr: any) {
           console.warn(`[Playback] Native auto-resolve fallback to embed for TV ${tmdbId} S${season}E${episode}:`, sniffErr.message);
         }
+      }
+
+      if (hasDirectSource) {
+        console.log(`[Playback] Using direct ${config.source!.type.toUpperCase()} source from ${config.source!.provider}, skipping sniffer`);
       }
 
       if (nativeStream) {
@@ -1066,6 +1163,20 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
    * Dashboard statistics — library counts, active rooms, recent sessions.
    */
   router.get('/admin/stats', adminLimiter, requireAdmin, (req, res) => {
+    // Get analytics data
+    const analytics = analyticsTracker.getStats();
+    
+    // Get provider health stats
+    const providerStats = providerRegistry.getAll().map((p) => ({
+      id: p.id,
+      name: p.name,
+      enabled: providerRegistry.isEnabled(p.id),
+      healthScore: providerHealth.getProviderScore(p.id),
+      successRate: providerHealth.getSuccessRate(p.id),
+      inCooldown: providerHealth.isProviderInCooldown(p.id),
+      totalAttempts: providerHealth.getAttempts(p.id),
+    }));
+    
     // ── Library Stats ────────────────────────────────────────────────────────
     const allMedia = Array.from(store.media.values());
     const titles = Array.from(store.titles.values());
@@ -1098,14 +1209,24 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
       .sort((a, b) => b.watchCount - a.watchCount)
       .slice(0, 20);
 
+    // Merge with streaming analytics
+    const topStreaming = analytics.topStreaming.map((s) => ({
+      id: s.kind === 'movie' ? `streaming-movie-${s.tmdbId}` : `streaming-tv-${s.tmdbId}-${s.season}-${s.episode}`,
+      title: s.season && s.episode ? `${s.title} S${s.season}E${s.episode}` : s.title,
+      kind: s.kind,
+      watchCount: s.watchCount,
+      totalWatchTime: 0,
+      posterUrl: undefined,
+    }));
+
     // Total watch time across all users & media
     const totalWatchTime = Object.values(watchCounts).reduce((sum, v) => sum + v.totalWatchTime, 0);
 
-    // Count unique users from progress
-    const totalUsers = Object.keys(progressData).length;
+    // Count unique users from progress + analytics
+    const progressUsers = Object.keys(progressData).length;
+    const totalUsers = Math.max(progressUsers, analytics.totalUsers);
 
     // ── Room Stats (from realtime hub) ───────────────────────────────────────
-    // These are attached by app.ts onto res.locals or as a closure — we pass them in via deps
     const roomStats = (deps as any).getRoomStats?.() ?? { activeRooms: 0, totalRooms: 0 };
 
     // ── Recent Activity ──────────────────────────────────────────────────────
@@ -1125,10 +1246,10 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
 
     res.json({
       totalUsers,
-      activeSessions: roomStats.activeRooms,
+      activeSessions: analytics.activeSessions,
       totalWatchTime,
-      mostWatchedContent: mostWatched,
-      trafficSources: [],
+      mostWatchedContent: [...topStreaming, ...mostWatched].slice(0, 20),
+      trafficSources: analytics.trafficSources,
       recentActivity,
       activeRooms: roomStats.activeRooms,
       totalRooms: roomStats.totalRooms,
@@ -1141,6 +1262,7 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
         activeBrowserSessions: streamResolver.getActiveBrowserCount(),
         maxBrowserSessions: 3,
       },
+      providers: providerStats,
     });
   });
 
@@ -1343,6 +1465,9 @@ export function createRoutes(svc: LibraryService, deps: { sessions: SessionManag
 
   // Mount HLS Stream Proxy
   router.use('/stream-proxy', streamProxyRouter);
+  
+  // Mount Provider Stream Proxy (for Dizibal, etc.)
+  router.use('/provider-stream-proxy', providerStreamProxyRouter);
 
   router.use((_req, res) => notFound(res));
   router.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

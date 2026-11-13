@@ -303,7 +303,14 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
 
       // STREAMING: HLS source
       if (source.type === 'hls' && Hls.isSupported()) {
-        hls = new Hls({ startPosition: startRef.current, maxBufferLength: 40, backBufferLength: 90, enableWorker: true });
+        hls = new Hls({
+          startPosition: startRef.current,
+          maxBufferLength: 30,          // seconds ahead to buffer (was 40 — lower = faster seeks)
+          maxMaxBufferLength: 60,        // absolute max buffer
+          backBufferLength: 30,          // seconds behind to keep (was 90 — less memory)
+          maxBufferHole: 0.5,            // tolerate small gaps
+          enableWorker: true,
+        });
         hlsRef.current = hls;
         let net = 0, mediaErr = 0, fragParseFails = 0, fragLoadFails = 0;
         
@@ -331,6 +338,7 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
         });
         
         hls.on(Hls.Events.FRAG_BUFFERED, () => { fragParseFails = 0; fragLoadFails = 0; });
+        v.addEventListener('seeking', () => { fragLoadFails = 0; }, { signal: ac.signal });
 
         hls.on(Hls.Events.ERROR, (_e, d) => {
           console.error('[Player] HLS error:', {
@@ -348,7 +356,12 @@ export const Player = forwardRef<PlayerHandle, Props>(function Player(props, ref
           // mean the stream segments are blocked or invalid. Fail over to an alternative source.
           if (d.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
             const status = d.response?.code || (d.context as any)?.xhr?.status;
-            if (status === 403 || ++fragLoadFails >= 2) {
+            // Status 0 represents aborted requests (e.g. when user seeks and previous segment fetch is cancelled).
+            // Do NOT count aborted requests as failures!
+            if (status === 0) {
+              return;
+            }
+            if (status === 403 || ++fragLoadFails >= 5) {
               console.log(`[Player] Fragment load failed (status: ${status}, count: ${fragLoadFails}), failing over`);
               api.reportPlaybackFailure({
                 provider: source.provider,

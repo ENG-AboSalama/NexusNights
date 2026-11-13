@@ -9,6 +9,7 @@ import { useAsync } from '../hooks';
 import { useI18n } from '../i18n';
 import { allProgress, isFinished } from '../progress';
 import { go, hrefs } from '../router';
+import { setMovieMetaTags, setSeriesMetaTags, resetMetaTags } from '../meta';
 
 export function TitlePage({ id }: { id: string }) {
   const { lang, t, num } = useI18n();
@@ -16,6 +17,29 @@ export function TitlePage({ id }: { id: string }) {
   const progress = useMemo(() => allProgress(), [id]);
   const [season, setSeason] = useState<number | null>(null);
   const data = d.data;
+
+  // Update meta tags when title data loads
+  useEffect(() => {
+    if (data) {
+      if (data.kind === 'movie') {
+        setMovieMetaTags({
+          title: data.title,
+          overview: data.overview,
+          posterPath: data.posterUrl?.replace(u('/'), '') || null,
+          releaseYear: data.year,
+        });
+      } else {
+        setSeriesMetaTags({
+          title: data.title,
+          overview: data.overview,
+          posterPath: data.posterUrl?.replace(u('/'), '') || null,
+          releaseYear: data.year,
+        });
+      }
+    }
+    
+    return () => resetMetaTags();
+  }, [data]);
 
   // Default season = the one you are currently watching, else the first.
   const resumeEp = useMemo(() => {

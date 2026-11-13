@@ -5,6 +5,7 @@ import { VixSrcAdapter } from './adapters/vixsrc-adapter';
 import { VidSrcMovAdapter } from './adapters/vidsrc-mov-adapter';
 import { VidApiAdapter } from './adapters/vidapi-adapter';
 import { VidRockAdapter } from './adapters/vidrock-adapter';
+import { DizibalAdapter } from './adapters/dizibal-adapter';
 import { providerHealth } from './provider-health';
 
 export class ProviderRegistry {
@@ -17,6 +18,7 @@ export class ProviderRegistry {
   }
 
   private registerDefaults() {
+    this.register(new DizibalAdapter());  // Turkish content priority
     this.register(new VidSrcMovAdapter()); // Primary
     this.register(new VixSrcAdapter());    // Fallback
     this.register(new VidApiAdapter());
@@ -107,7 +109,9 @@ export class ProviderRegistry {
       let description = '';
       let unsupportedReason: string | undefined = undefined;
 
-      if (adapter.id === 'vidsrc-mov') {
+      if (adapter.id === 'dizibal') {
+        description = 'Turkish streaming provider with direct M3U8 sources for Turkish movies, series & anime';
+      } else if (adapter.id === 'vidsrc-mov') {
         description = 'Primary fast embed provider with automatic multi-mirror fallback';
       } else if (adapter.id === 'vixsrc') {
         description = 'Fallback 1080p stream embed with comprehensive catalog & direct resolution';

@@ -17,6 +17,10 @@ export function WatchPartyButton({ mediaId, title, className = '' }: Props) {
   const { t, lang } = useI18n();
   const auth = useAuth();
   const [loading, setLoading] = useState(false);
+  
+  // Hide in Discord Activity (room is auto-created from voice channel)
+  const isDiscordActivity = window.location.hash.includes('#/discord');
+  if (isDiscordActivity) return null;
 
   const handleClick = async () => {
     if (!auth.user) {

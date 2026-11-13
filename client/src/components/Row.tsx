@@ -57,14 +57,20 @@ function Arrow({ side, onClick }: { side: 'start' | 'end'; onClick: () => void }
     : (lang === 'ar' ? 'التالي' : 'Next');
   
   return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      className={`absolute inset-y-2 z-10 hidden w-12 items-center justify-center opacity-0 transition-opacity duration-300 group-hover/row:opacity-100 sm:flex ${
-        side === 'start' ? 'start-0 bg-gradient-to-r from-ink/90 to-transparent rtl:bg-gradient-to-l' : 'end-0 bg-gradient-to-l from-ink/90 to-transparent rtl:bg-gradient-to-r'
+    <div
+      className={`pointer-events-none absolute inset-y-2 z-10 hidden w-16 items-center opacity-0 transition-opacity duration-300 group-hover/row:opacity-100 sm:flex ${
+        side === 'start'
+          ? 'start-0 justify-start bg-gradient-to-r from-ink via-ink/60 to-transparent rtl:bg-gradient-to-l'
+          : 'end-0 justify-end bg-gradient-to-l from-ink via-ink/60 to-transparent rtl:bg-gradient-to-r'
       }`}
     >
-      <Icon className="size-8 rtl:-scale-x-100" aria-hidden="true" />
-    </button>
+      <button
+        onClick={onClick}
+        aria-label={label}
+        className="pointer-events-auto mx-1 flex size-9 items-center justify-center rounded-full border border-white/10 bg-coal/80 text-bone shadow-lg backdrop-blur-md transition-all duration-200 hover:scale-110 hover:border-gilt/50 hover:bg-coal hover:text-gilt active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt"
+      >
+        <Icon className="size-5 rtl:-scale-x-100" aria-hidden="true" />
+      </button>
+    </div>
   );
 }

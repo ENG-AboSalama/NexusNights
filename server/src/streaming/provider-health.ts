@@ -223,6 +223,26 @@ export class ProviderHealthTracker {
   }
 
   /**
+   * Get success rate as percentage string
+   */
+  getSuccessRate(provider: string): string {
+    const p = provider.toLowerCase();
+    const stats = this.providerStats.get(p);
+    if (!stats || stats.totalAttempts === 0) return '0%';
+    
+    const rate = (stats.successfulAttempts / stats.totalAttempts) * 100;
+    return `${rate.toFixed(1)}%`;
+  }
+
+  /**
+   * Get total attempts for a provider
+   */
+  getAttempts(provider: string): number {
+    const stats = this.providerStats.get(provider.toLowerCase());
+    return stats?.totalAttempts || 0;
+  }
+
+  /**
    * Get all provider stats
    */
   getAllStats(): Map<string, ProviderHealthStats> {

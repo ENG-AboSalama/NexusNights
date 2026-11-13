@@ -6,6 +6,7 @@ import { Hero } from '../components/Hero';
 import { Row } from '../components/Row';
 import { HeroSkeleton, RowSkeleton } from '../components/Skeleton';
 import { ErrorState } from '../components/States';
+import { DiscordActivityBanner } from '../components/DiscordActivityBanner';
 import { useAsync } from '../hooks';
 import { useI18n } from '../i18n';
 import { allProgress, continueIds, getProgress, progressVersion, subscribeProgress } from '../progress';
@@ -71,7 +72,7 @@ export function GlobalHome() {
   };
 
   return (
-    <div className="pb-16">
+    <main className="pb-16">
       {hero && (
         <Hero
           hero={{
@@ -99,7 +100,7 @@ export function GlobalHome() {
         />
       )}
       
-      <div className="relative z-10 -mt-14 space-y-1 sm:-mt-20">
+      <div className="relative z-10 space-y-8">
         {/* Continue Watching */}
         {contItems.length > 0 && (
           <Row title={t('continueWatching')}>
@@ -111,14 +112,29 @@ export function GlobalHome() {
         )}
 
         {/* Global Discovery Sections */}
-        {sections.map((section) => (
-          <Row key={section.key} title={section.title}>
-            {section.items.map((card) => (
-              <GlobalCard key={card.id} card={card} />
-            ))}
-          </Row>
-        ))}
+        {sections.map((section, sectionIdx) => {
+          const isRanked =
+            sectionIdx === 0 ||
+            section.key.includes('trending') ||
+            section.key.includes('popular');
+          return (
+            <Row key={section.key} title={section.title}>
+              {section.items.map((card, idx) => (
+                <GlobalCard
+                  key={card.id}
+                  card={card}
+                  rank={isRanked ? idx + 1 : undefined}
+                />
+              ))}
+            </Row>
+          );
+        })}
       </div>
-    </div>
+
+      {/* Discord Activity Banner — bottom of page, after all content */}
+      <div className="px-[var(--pad)] pb-16 pt-8">
+        <DiscordActivityBanner />
+      </div>
+    </main>
   );
 }

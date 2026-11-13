@@ -17,11 +17,13 @@ import {
 import { Avatar } from '../components/Avatar';
 import { Player, type PlayerHandle } from '../player/Player';
 import { EMOJIS } from '../room/RoomContext';
+import { useDiscord } from '../discord/useDiscord';
 
 export function DiscordActivity() {
   const { lang, t, toggle } = useI18n();
   const room = useRoom();
   const auth = useAuth();
+  const discord = useDiscord();
 
   const [activeTab, setActiveTab] = useState<'watch' | 'browse' | 'members'>('browse');
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,6 +64,21 @@ export function DiscordActivity() {
       setActiveTab('watch');
     }
   }, [activeMediaId]);
+
+  // ── Update Discord Activity status when watching media ─────────────────────
+  useEffect(() => {
+    if (discord.isReady && mediaDetail) {
+      const title = mediaDetail.titleName || mediaDetail.title;
+      const details = mediaDetail.kind === 'series' 
+        ? `${title} - S${mediaDetail.season}E${mediaDetail.episode}`
+        : title;
+      const state = room.room?.members.length 
+        ? `${t('with')} ${room.room.members.length} ${room.room.members.length === 1 ? t('friend') : t('friends')}`
+        : t('watchingAlone');
+      
+      void discord.updateActivity(details, state);
+    }
+  }, [discord.isReady, mediaDetail, room.room?.members.length]);
 
   // ── Load Catalog from Discovery ───────────────────────────────────────────
   useEffect(() => {
@@ -286,6 +303,60 @@ export function DiscordActivity() {
     if (filterKind === 'all') return list;
     return list.filter((t) => t.kind === filterKind);
   }, [searchQuery, searchResults, catalog.titles, filterKind]);
+
+  // Show Discord loading screen while SDK initializes
+  if (discord.isLoading) {
+    return (
+      <div
+        dir={lang === 'ar' ? 'rtl' : 'ltr'}
+        className="flex h-[100dvh] w-full flex-col items-center justify-center bg-ink text-bone font-sans antialiased"
+      >
+        <div className="flex flex-col items-center gap-4 p-8">
+          <div className="group flex items-center gap-2 mb-2" aria-label="NexusNight">
+            <Sigil className="size-10 text-blood-hot animate-pulse" />
+            <span lang="en" dir="ltr" className="font-[Cinzel] text-[2rem] font-extrabold tracking-[0.02em] text-bone">
+              <span className="text-blood-hot">NEXUS</span>
+              <span className="text-gilt">NIGHT</span>
+            </span>
+          </div>
+          <Spinner className="size-8 text-gilt animate-spin" />
+          <p className="text-sm font-medium text-dust animate-pulse">
+            {lang === 'ar' ? 'جاري الاتصال بـ Discord...' : 'Connecting to Discord...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if Discord SDK failed to initialize
+  if (discord.error) {
+    return (
+      <div
+        dir={lang === 'ar' ? 'rtl' : 'ltr'}
+        className="flex h-[100dvh] w-full flex-col items-center justify-center bg-ink text-bone font-sans antialiased"
+      >
+        <div className="flex flex-col items-center gap-4 p-8 text-center max-w-md">
+          <div className="size-16 rounded-2xl bg-blood/20 border border-blood/40 flex items-center justify-center">
+            <Discord className="size-8 text-blood" />
+          </div>
+          <h2 className="font-display text-lg font-bold text-bone">
+            {lang === 'ar' ? 'فشل الاتصال بـ Discord' : 'Discord Connection Failed'}
+          </h2>
+          <p className="text-sm text-dust leading-relaxed">
+            {lang === 'ar' 
+              ? 'تأكد من أنك تشغل التطبيق من داخل Discord Activity. يمكنك أيضاً استخدام الموقع الرئيسي للمشاهدة المتزامنة.'
+              : 'Make sure you\'re running this from within a Discord Activity. You can also use the main site for watch parties.'}
+          </p>
+          <button
+            onClick={() => window.location.hash = '#/'}
+            className="mt-2 flex items-center gap-2 rounded-xl bg-gradient-to-r from-blood to-blood-hot px-5 py-2.5 font-display text-sm font-bold text-white shadow-[0_0_20px_rgba(186,24,27,0.4)] transition-all hover:scale-105 active:scale-95"
+          >
+            {lang === 'ar' ? 'العودة إلى الصفحة الرئيسية' : 'Go to Main Site'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

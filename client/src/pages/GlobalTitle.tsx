@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api, ApiError } from '../api';
 import type { GlobalTitleDetail } from '../api-types';
 import { ErrorState } from '../components/States';
@@ -9,6 +9,7 @@ import { go } from '../router';
 import { GlobalCard } from '../components/GlobalCard';
 import { WatchPartyButton } from '../components/WatchPartyButton';
 import { Play, Star } from '../components/Icons';
+import { setMovieMetaTags, setSeriesMetaTags, resetMetaTags } from '../meta';
 
 interface Props {
   kind: 'movie' | 'series';
@@ -18,6 +19,7 @@ interface Props {
 export function GlobalTitle({ kind, tmdbId }: Props) {
   const { lang, t } = useI18n();
   const [selectedSeason, setSelectedSeason] = useState(1);
+  const episodesRef = useRef<HTMLDivElement>(null);
   
   const detail = useAsync(
     (s) => (kind === 'movie' ? api.discoveryMovie(tmdbId, lang, s) : api.discoveryTV(tmdbId, lang, s)),
@@ -28,6 +30,30 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
     (s) => (kind === 'series' && selectedSeason > 0 ? api.discoverySeason(tmdbId, selectedSeason, lang, s) : Promise.resolve(null)),
     [kind, tmdbId, selectedSeason, lang]
   );
+
+  // Update meta tags when title data loads
+  useEffect(() => {
+    if (detail.data) {
+      if (kind === 'movie') {
+        setMovieMetaTags({
+          title: detail.data.title,
+          overview: detail.data.overview,
+          posterPath: detail.data.posterUrl?.replace(/^https:\/\/[^/]+/, '') || null,
+          releaseYear: detail.data.year,
+        });
+      } else {
+        setSeriesMetaTags({
+          title: detail.data.title,
+          overview: detail.data.overview,
+          posterPath: detail.data.posterUrl?.replace(/^https:\/\/[^/]+/, '') || null,
+          releaseYear: detail.data.year,
+        });
+      }
+    }
+    
+    // Cleanup: reset to default on unmount
+    return () => resetMetaTags();
+  }, [detail.data, kind]);
 
   if (detail.error && !detail.data) {
     const nf = detail.error instanceof ApiError && detail.error.status === 404;
@@ -56,8 +82,8 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
         const syntheticMediaId = `streaming-movie-${tmdbId}`;
         go.watch(syntheticMediaId);
       } else {
-        // For TV shows, user needs to select an episode
-        alert(lang === 'ar' ? 'الرجاء اختيار حلقة' : 'Please select an episode to play');
+        // For TV shows, scroll smoothly down to the episodes selector
+        episodesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
   };
@@ -125,19 +151,19 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
             {/* Availability */}
             <div className="mt-4 flex gap-2 flex-wrap">
               {title.availability === 'local' && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600/20 border border-emerald-600/40 px-3 py-1 text-xs font-semibold text-emerald-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-950/70 border border-emerald-500/30 px-3 py-1 text-xs font-semibold text-emerald-300 shadow-sm backdrop-blur-sm">
                   <span className="size-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
                   {lang === 'ar' ? 'متاح محليًا' : 'Local'}
                 </span>
               )}
               {title.availability === 'stream' && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-600/20 border border-sky-600/40 px-3 py-1 text-xs font-semibold text-sky-400">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-950/70 border border-sky-500/30 px-3 py-1 text-xs font-semibold text-sky-300 shadow-sm backdrop-blur-sm">
                   <span className="size-1.5 rounded-full bg-sky-400" aria-hidden="true" />
-                  {lang === 'ar' ? 'بث متاح' : 'Stream'}
+                  {lang === 'ar' ? 'بث فوري' : 'Stream'}
                 </span>
               )}
               {title.availability === 'discover' && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-dust/10 border border-dust/30 px-3 py-1 text-xs font-semibold text-dust">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.04] border border-white/10 px-3 py-1 text-xs font-medium text-dust">
                   {lang === 'ar' ? 'للاستكشاف' : 'Discover'}
                 </span>
               )}
@@ -146,10 +172,10 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
             <div className="mt-6 flex gap-3 flex-wrap items-center">
               <button
                 onClick={handlePlay}
-                className="group inline-flex h-11 items-center gap-2.5 rounded-md bg-blood px-7 font-semibold text-white shadow-[0_8px_30px_-8px_rgba(220,48,68,0.7)] transition-all hover:bg-blood-hot hover:shadow-[0_10px_36px_-6px_rgba(220,48,68,0.9)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                className="group inline-flex h-11 items-center gap-2.5 rounded-lg bg-blood px-7 font-semibold text-white shadow-[0_8px_30px_-8px_rgba(220,48,68,0.7)] transition-all hover:bg-blood-hot hover:shadow-[0_10px_36px_-6px_rgba(220,48,68,0.9)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
               >
                 <Play className="size-5 transition-transform group-hover:scale-110 rtl:-scale-x-100" aria-hidden="true" />
-                {kind === 'series' ? t('viewDetails') : t('play')}
+                {kind === 'series' ? (lang === 'ar' ? 'اختر حلقة' : 'Select Episode') : t('play')}
               </button>
               {kind === 'movie' && (
                 <WatchPartyButton
@@ -159,7 +185,7 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
               )}
               <button
                 onClick={() => go.home()}
-                className="inline-flex h-11 items-center gap-2 rounded-md border border-gilt/30 bg-gilt/5 px-6 font-semibold text-gilt transition-colors hover:border-gilt/60 hover:bg-gilt/15 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+                className="inline-flex h-11 items-center gap-2 rounded-lg border border-gilt/30 bg-gilt/5 px-6 font-semibold text-gilt transition-colors hover:border-gilt/60 hover:bg-gilt/15 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
               >
                 {t('back')}
               </button>
@@ -178,7 +204,7 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
 
         {/* TV Show: Seasons & Episodes */}
         {kind === 'series' && title.seasons && title.seasons.length > 0 && (
-          <div>
+          <div ref={episodesRef} id="episodes" className="scroll-mt-24">
             <h2 className="mb-4 font-display text-2xl font-semibold tracking-wide">{t('seasons')}</h2>
             
             {/* Season Selector */}
@@ -187,10 +213,10 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
                 <button
                   key={s.seasonNumber}
                   onClick={() => setSelectedSeason(s.seasonNumber)}
-                  className={`rounded-md px-4 py-2 text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt ${
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt ${
                     selectedSeason === s.seasonNumber
-                      ? 'bg-blood text-white shadow-[0_4px_16px_-4px_rgba(220,48,68,0.6)]'
-                      : 'bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 active:scale-95'
+                      ? 'bg-blood text-white shadow-[0_4px_16px_rgba(220,48,68,0.4)] ring-1 ring-blood-hot/50'
+                      : 'bg-white/[0.04] border border-white/10 text-dust hover:text-bone hover:border-gilt/30 hover:bg-white/[0.08] active:scale-95'
                   }`}
                   aria-pressed={selectedSeason === s.seasonNumber}
                 >
@@ -201,17 +227,17 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
 
             {/* Episodes */}
             {season.data && season.data.episodes && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {season.data.episodes.map((ep) => (
                   <div
                     key={ep.episodeNumber}
-                    className="group flex gap-4 rounded-lg bg-white/[0.03] border border-white/[0.06] p-3.5 transition-all hover:bg-white/[0.06] hover:border-gilt/20"
+                    className="group flex gap-4 rounded-xl bg-white/[0.02] border border-white/[0.06] p-3.5 transition-all duration-300 hover:bg-white/[0.05] hover:border-gilt/30 hover:shadow-[0_8px_24px_rgba(0,0,0,0.6)]"
                   >
                     {ep.stillUrl && (
                       <img
                         src={ep.stillUrl}
                         alt=""
-                        className="h-20 w-36 flex-shrink-0 rounded-md object-cover ring-1 ring-white/10 transition-all group-hover:ring-gilt/30 sm:h-24 sm:w-40"
+                        className="h-20 w-36 flex-shrink-0 rounded-lg object-cover ring-1 ring-white/10 transition-all duration-300 group-hover:ring-gilt/40 group-hover:scale-[1.02] sm:h-24 sm:w-40"
                         loading="lazy"
                       />
                     )}
@@ -219,18 +245,18 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
                       <h3 className="font-semibold text-bone transition-colors group-hover:text-gilt truncate-safe">
                         {ep.episodeNumber}. {ep.name}
                       </h3>
-                      <p className="mt-1.5 text-sm text-dust line-clamp-2 leading-relaxed">{ep.overview}</p>
-                      <div className="mt-2 flex items-center gap-3 text-xs text-dust">
+                      <p className="mt-1.5 text-sm text-dust/80 line-clamp-2 leading-relaxed">{ep.overview}</p>
+                      <div className="mt-2.5 flex items-center gap-3 text-xs text-dust">
                         {ep.airDate && <span>{ep.airDate}</span>}
                         {ep.runtime && <span>{ep.runtime} {t('minutesUnit')}</span>}
                         {ep.rating && (
-                          <span className="inline-flex items-center gap-0.5">
-                            <Star className="size-2.5" aria-hidden="true" />
+                          <span className="inline-flex items-center gap-1 text-gilt font-mono">
+                            <Star className="size-3 fill-gilt" aria-hidden="true" />
                             {ep.rating.toFixed(1)}
                           </span>
                         )}
                         {ep.availability === 'local' && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600/20 border border-emerald-600/40 px-2 py-0.5 text-emerald-400 font-medium">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 text-emerald-300 font-medium text-[11px]">
                             <span className="size-1 rounded-full bg-emerald-400" aria-hidden="true" />
                             {lang === 'ar' ? 'محلي' : 'Local'}
                           </span>
@@ -239,7 +265,7 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
                     </div>
                     <button
                       onClick={() => handleEpisodePlay(ep.seasonNumber, ep.episodeNumber, ep.localMediaId)}
-                      className="flex-shrink-0 self-center inline-flex h-9 items-center gap-2 rounded-md bg-blood px-5 text-sm font-semibold transition-all hover:bg-blood-hot hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt"
+                      className="flex-shrink-0 self-center inline-flex h-9 items-center gap-2 rounded-lg bg-blood px-4 sm:px-5 text-sm font-semibold transition-all duration-200 hover:bg-blood-hot hover:scale-[1.03] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gilt shadow-[0_4px_16px_rgba(220,48,68,0.3)]"
                       aria-label={`${t('play')} ${ep.name}`}
                     >
                       <Play className="size-4 rtl:-scale-x-100" aria-hidden="true" />
@@ -253,7 +279,7 @@ export function GlobalTitle({ kind, tmdbId }: Props) {
             {season.loading && (
               <div className="space-y-3">
                 {[...Array(5)].map((_, i) => (
-                  <Skel key={i} className="h-24 w-full" />
+                  <Skel key={i} className="h-24 w-full rounded-xl" />
                 ))}
               </div>
             )}
